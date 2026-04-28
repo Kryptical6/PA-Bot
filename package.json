@@ -1,0 +1,21 @@
+{
+  "name": "staff-bot",
+  "version": "2.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "deploy": "node dist/deployCommands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "@neondatabase/serverless": "^0.9.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.7",
+    "ts-node": "^10.9.2"
+  }
+}
