@@ -18,6 +18,8 @@ import { data as listAssessments } from './commands/spa/list_assessments';
 import { data as createTag } from './commands/spa/create_tag';
 import { data as editTag } from './commands/spa/edit_tag';
 import { data as deleteTag } from './commands/spa/delete_tag';
+import { data as createEmbed } from './commands/spa/create_embed';
+import { data as editEmbed } from './commands/spa/edit_embed';
 import { data as forceStrike } from './commands/hpa/force_strike';
 import { data as manageLog } from './commands/hpa/manage_log';
 import { data as setEscalation } from './commands/hpa/set_escalation';
@@ -37,7 +39,7 @@ import { data as approveRetake } from './commands/hpa/approve_retake';
 
 const commands = [
   help, myLogs, appeal, tag, tagSearch, paAssessment,
-  logMistake, staffProfile, staffOverview, lookupPost, warnUser, createVote, listAssessments, createTag, editTag, deleteTag,
+  logMistake, staffProfile, staffOverview, lookupPost, warnUser, createVote, listAssessments, createTag, editTag, deleteTag, createEmbed, editEmbed,
   forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser, bulkActions, manageLogTracker,
   createAssessment, createAssessmentQ, editAssessmentQ, deleteAssessmentQ, publishAssessment, restrictAssessment, viewResults, viewSessions, approveRetake,
 ].map(c => c.toJSON());

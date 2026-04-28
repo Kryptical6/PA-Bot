@@ -26,6 +26,8 @@ import * as listAssessments from '../commands/spa/list_assessments';
 import * as createTag from '../commands/spa/create_tag';
 import * as editTag from '../commands/spa/edit_tag';
 import * as deleteTag from '../commands/spa/delete_tag';
+import * as createEmbed from '../commands/spa/create_embed';
+import * as editEmbed from '../commands/spa/edit_embed';
 import * as forceStrike from '../commands/hpa/force_strike';
 import * as manageLog from '../commands/hpa/manage_log';
 import * as setEscalation from '../commands/hpa/set_escalation';
@@ -48,6 +50,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   log_mistake: logMistake, staff_profile: staffProfile, staff_overview: staffOverview,
   lookup_post: lookupPost, warn_user: warnUser, create_vote: createVote,
   list_assessments: listAssessments, create_tag: createTag, edit_tag: editTag, delete_tag: deleteTag,
+  create_embed: createEmbed, edit_embed: editEmbed,
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
   manage_log_tracker: manageLogTracker, create_assessment: createAssessment,
@@ -180,15 +183,23 @@ async function handleButton(i: any): Promise<void> {
   // Votes
   else if (action === 'vote_cast') {
     const voteId = parseInt(rest[0]);
-    const [vote] = await sql`SELECT * FROM votes WHERE id = ${voteId}`;
-    if (!vote || vote.status === 'closed') { await i.reply({ embeds: [errorEmbed('This vote is no longer active.')], ephemeral: true }); return; }
+    const voteRows = await sql`SELECT * FROM votes WHERE id = ${voteId}`;
+    if (voteRows.length === 0 || voteRows[0].status === 'closed') { await i.reply({ embeds: [errorEmbed('This vote is no longer active.')], ephemeral: true }); return; }
+    const vote = voteRows[0];
     if (new Date(vote.deadline) <= new Date()) { await closeVote(i.client, voteId); await i.reply({ embeds: [errorEmbed('Vote expired.')], ephemeral: true }); return; }
 
-    const guild = i.guild!;
-    const candidates = (await guild.members.fetch()).filter((m: GuildMember) => m.roles.cache.has(vote.role_id) && m.id !== i.user.id);
-    if (candidates.size === 0) { await i.reply({ embeds: [errorEmbed('No eligible candidates.')], ephemeral: true }); return; }
+    if (!i.guild) { await i.reply({ embeds: [errorEmbed('Could not access server data.')], ephemeral: true }); return; }
 
-    const select = new StringSelectMenuBuilder().setCustomId(`vote_select:${voteId}`).setPlaceholder('Select a candidate')
+    await i.guild.members.fetch();
+    const candidatesCollection = i.guild.members.cache.filter((m: GuildMember) => m.roles.cache.has(vote.role_id) && m.id !== i.user.id && !m.user.bot);
+    const candidates = Array.from(candidatesCollection.values());
+
+    if (candidates.length === 0) { await i.reply({ embeds: [errorEmbed('No eligible candidates found.')], ephemeral: true }); return; }
+    if (candidates.length > 25) candidates.splice(25);
+
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`vote_select:${voteId}`)
+      .setPlaceholder('Select a candidate')
       .addOptions(candidates.map((m: GuildMember) => new StringSelectMenuOptionBuilder().setLabel(m.displayName).setValue(m.id)));
 
     const components: any[] = [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
@@ -380,7 +391,58 @@ async function handleSelect(i: any): Promise<void> {
 async function handleModal(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
-  if (action === 'modal_deny_log') {
+  if (action === 'create_embed_modal') {
+    const channelId = rest[0];
+    const color     = rest[1];
+    const title   = i.fields.getTextInputValue('title').trim() || null;
+    const content = i.fields.getTextInputValue('content').trim();
+    const footer  = i.fields.getTextInputValue('footer').trim() || null;
+
+    const colorMap: Record<string, number> = {
+      blue: 0x3498db, green: 0x2ecc71, red: 0xe74c3c,
+      yellow: 0xf1c40f, purple: 0x9b59b6, orange: 0xe67e22, white: 0xffffff,
+    };
+
+    const embed = new EmbedBuilder().setColor(colorMap[color] ?? 0x3498db).setDescription(content).setTimestamp();
+    if (title) embed.setTitle(title);
+    if (footer) embed.setFooter({ text: footer });
+
+    try {
+      const ch = await i.client.channels.fetch(channelId) as TextChannel;
+      const msg = await ch.send({ embeds: [embed] });
+      await i.reply({ content: `✅ Embed posted in <#${channelId}>! Message ID: \`${msg.id}\``, ephemeral: true });
+    } catch (e) {
+      await i.reply({ embeds: [errorEmbed('Failed to post embed. Check the bot has permission to send messages in that channel.')], ephemeral: true });
+    }
+  }
+
+  else if (action === 'edit_embed_modal') {
+    const channelId = rest[0];
+    const messageId = rest[1];
+    const title   = i.fields.getTextInputValue('title').trim() || null;
+    const content = i.fields.getTextInputValue('content').trim();
+    const footer  = i.fields.getTextInputValue('footer').trim() || null;
+
+    try {
+      const ch  = await i.client.channels.fetch(channelId) as TextChannel;
+      const msg = await ch.messages.fetch(messageId);
+      const existing = msg.embeds[0];
+
+      const embed = new EmbedBuilder()
+        .setColor(existing?.color ?? 0x3498db)
+        .setDescription(content)
+        .setTimestamp();
+      if (title) embed.setTitle(title);
+      if (footer) embed.setFooter({ text: footer });
+
+      await msg.edit({ embeds: [embed] });
+      await i.reply({ content: '✅ Embed updated successfully.', ephemeral: true });
+    } catch (e) {
+      await i.reply({ embeds: [errorEmbed('Failed to edit embed. Make sure the message ID and channel are correct.')], ephemeral: true });
+    }
+  }
+
+  else if (action === 'modal_deny_log') {
     await i.deferReply({ ephemeral: true });
     const pendingId = parseInt(rest[0]);
     const reason    = i.fields.getTextInputValue('reason').trim();
