@@ -239,6 +239,42 @@ async function handleButton(i: any): Promise<void> {
     else await finalizeAssessment(i.client, i.user.id, sessionId, false);
   }
 
+  // Retake requests
+  else if (action === 'retake_approve') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const reqId = parseInt(rest[0]);
+    const [req] = await sql`SELECT r.*, a.title FROM retake_requests r JOIN assessments a ON r.assessment_id = a.id WHERE r.id = ${reqId}`;
+    if (!req) { await i.reply({ embeds: [errorEmbed('Request not found.')], ephemeral: true }); return; }
+    await sql`UPDATE retake_requests SET status = 'approved' WHERE id = ${reqId}`;
+    await sql`DELETE FROM assessment_sessions WHERE user_id = ${req.user_id} AND assessment_id = ${req.assessment_id}`;
+    await safeDM(i.client, req.user_id, successEmbed('Retake Approved', `Your retake for **${req.title}** has been approved. Use \`/pa_assessment\` to begin.`), 'retake approved');
+    await i.update({ components: [] });
+    await i.followUp({ embeds: [successEmbed('Approved', `Retake approved for <@${req.user_id}>.`)], ephemeral: true });
+  }
+
+  else if (action === 'retake_deny') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const reqId = parseInt(rest[0]);
+    const [req] = await sql`SELECT r.*, a.title FROM retake_requests r JOIN assessments a ON r.assessment_id = a.id WHERE r.id = ${reqId}`;
+    if (!req) { await i.reply({ embeds: [errorEmbed('Request not found.')], ephemeral: true }); return; }
+    await sql`UPDATE retake_requests SET status = 'denied' WHERE id = ${reqId}`;
+    await safeDM(i.client, req.user_id, warningEmbed('Retake Denied', `Your retake request for **${req.title}** has been denied.`), 'retake denied');
+    await i.update({ components: [] });
+    await i.followUp({ embeds: [successEmbed('Denied', `Retake denied for <@${req.user_id}>.`)], ephemeral: true });
+  }
+
+  else if (action === 'retake_reason') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const reqId = parseInt(rest[0]);
+    const [req] = await sql`SELECT r.*, a.title FROM retake_requests r JOIN assessments a ON r.assessment_id = a.id WHERE r.id = ${reqId}`;
+    if (!req) { await i.reply({ embeds: [errorEmbed('Request not found.')], ephemeral: true }); return; }
+    await safeDM(i.client, req.user_id, infoEmbed('Retake Request', `HPA is asking: **Why do you want to retake ${req.title}?**\n\nPlease contact your HPA directly with your reason.`), 'retake reason request');
+    await i.reply({ embeds: [successEmbed('Asked', `<@${req.user_id}> has been asked to provide a reason via DM.`)], ephemeral: true });
+  }
+
   else if (action === 'review_confirm') {
     const m = i.member as GuildMember;
     if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }

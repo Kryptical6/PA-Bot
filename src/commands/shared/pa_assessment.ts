@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder, ComponentType, TextChannel } from 'discord.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder, ComponentType, TextChannel, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { sql } from '../../database/client';
 import { errorEmbed, infoEmbed } from '../../utils/embeds';
 import { isPA } from '../../utils/permissions';
@@ -43,9 +43,27 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       }
       const [req] = await sql`INSERT INTO retake_requests (user_id, assessment_id) VALUES (${userId}, ${assessmentId}) RETURNING id`;
       try {
-        const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
-        await ch.send(`<@&${config.roles.HPA}> **Retake Request #${req.id}** - <@${userId}> wants to retake **${assessment.title}**.\nUse \`/approve_retake request_id:${req.id} approve:true/false\``);
-      } catch { /* silent */ }
+        const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
+        const embed = new EmbedBuilder()
+          .setColor(Colors.Orange)
+          .setTitle('🔄 Retake Request')
+          .addFields(
+            { name: 'User', value: `<@${userId}>`, inline: true },
+            { name: 'Assessment', value: assessment.title, inline: true },
+          )
+          .setFooter({ text: `Request ID: ${req.id}` })
+          .setTimestamp();
+
+        const approveBtn = new ButtonBuilder().setCustomId(`retake_approve:${req.id}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success);
+        const denyBtn    = new ButtonBuilder().setCustomId(`retake_deny:${req.id}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger);
+        const reasonBtn  = new ButtonBuilder().setCustomId(`retake_reason:${req.id}`).setLabel('❓ Ask for Reason').setStyle(ButtonStyle.Secondary);
+
+        await ch.send({
+          content: `<@&${config.roles.HPA}>`,
+          embeds: [embed],
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approveBtn, denyBtn, reasonBtn)]
+        });
+      } catch (e) { console.error('Failed to send retake request:', e); }
       await sel.update({ embeds: [infoEmbed('Retake Requested', 'Your retake request has been sent to HPA.')], components: [] });
       return;
     }

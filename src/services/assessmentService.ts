@@ -137,7 +137,7 @@ export async function finalizeAssessment(client: Client, userId: string, session
 }
 
 async function sendHPAReview(client: Client, userId: string, sessionId: number, resultId: number, responses: any[], assessment: any, score: number, total: number, pct: number, passed: boolean): Promise<void> {
-  const channelId = config.channels.assessmentResults || config.channels.hpaReview;
+  const channelId = config.channels.assessmentResults;
 
   const summary = new EmbedBuilder()
     .setColor(passed ? Colors.Green : Colors.Red)
@@ -173,8 +173,10 @@ async function sendHPAReview(client: Client, userId: string, sessionId: number, 
 
   try {
     const ch = await client.channels.fetch(channelId) as TextChannel;
+    if (!ch) { console.error('Assessment results channel not found:', channelId); return; }
     await ch.send({ content: `<@&${config.roles.HPA}> New assessment result ready`, embeds: [summary], components: [row] });
     for (const qe of questionEmbeds) await ch.send({ embeds: [qe] });
+    console.log(`Assessment review sent for result ${resultId}`);
   } catch (e) { console.error('Failed to send assessment review:', e); }
 }
 
