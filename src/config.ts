@@ -8,7 +8,7 @@ export const config = {
     hpaReview:         '1497723043131297914',
     appeals:           '1497723319829401750',
     logTracker:        '1357749002619322439',
-    assessmentResults: '1345780216488001697',
+    assessmentResults: '1357749002619322439',
   },
   escalation: {
     defaultRate: 3,
