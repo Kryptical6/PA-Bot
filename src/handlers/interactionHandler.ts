@@ -7,7 +7,7 @@ import { safeDM, dmUser } from '../services/dmService';
 import { checkEscalation } from '../services/escalationService';
 import { updateLogTracker } from '../services/logTrackerService';
 import { closeVote } from '../services/voteService';
-import { sendQuestion, sendScriptingQuestions, finalizeAssessment, sendFinalResult } from '../services/assessmentService';
+import { sendQuestion, sendScriptingQuestions, finalizeAssessment, sendFinalResult, buildReviewEmbed } from '../services/assessmentService';
 
 // Import all commands
 import * as help from '../commands/shared/help';
@@ -275,6 +275,27 @@ async function handleButton(i: any): Promise<void> {
     await i.reply({ embeds: [successEmbed('Asked', `<@${req.user_id}> has been asked to provide a reason via DM.`)], ephemeral: true });
   }
 
+  else if (action === 'review_page') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const resultId = parseInt(rest[0]);
+    const page     = parseInt(rest[1]);
+
+    const [result] = await sql`SELECT r.*, a.title, a.pass_threshold FROM assessment_results r JOIN assessments a ON r.assessment_id = a.id WHERE r.id = ${resultId}`;
+    if (!result) { await i.reply({ embeds: [errorEmbed('Result not found.')], ephemeral: true }); return; }
+
+    const responses = await sql`
+      SELECT r.*, q.correct_answer, q.keywords, q.is_scripting, q.post_id
+      FROM assessment_responses r JOIN assessment_questions q ON r.question_id = q.id
+      WHERE r.session_id = ${result.session_id} ORDER BY r.answered_at ASC
+    `;
+
+    const score  = result.hpa_override_score ?? result.score;
+    const passed = result.hpa_override_passed ?? result.passed;
+    const { embed, row } = buildReviewEmbed(result.user_id, { title: result.title, pass_threshold: result.pass_threshold }, responses, score, result.total, result.percentage, passed, page, resultId);
+    await i.update({ embeds: [embed], components: [row] });
+  }
+
   else if (action === 'review_confirm') {
     const m = i.member as GuildMember;
     if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
@@ -295,8 +316,9 @@ async function handleButton(i: any): Promise<void> {
       customId: `modal_override:${resultId}`,
       title: 'Override Result',
       components: [
-        { type: 1, components: [{ type: 4, customId: 'score', label: 'New Score (number)', style: 1, required: false, maxLength: 5 }] },
-        { type: 1, components: [{ type: 4, customId: 'passed', label: 'Pass? (yes/no)', style: 1, required: false, maxLength: 3 }] },
+        { type: 1, components: [{ type: 4, customId: 'score', label: 'Override total score (leave blank to skip)', style: 1, required: false, maxLength: 5 }] },
+        { type: 1, components: [{ type: 4, customId: 'passed', label: 'Override pass/fail? (yes/no, leave blank to skip)', style: 1, required: false, maxLength: 3 }] },
+        { type: 1, components: [{ type: 4, customId: 'question_overrides', label: 'Question overrides: Q1=correct,Q3=incorrect', style: 2, required: false, maxLength: 500, placeholder: 'e.g. Q1=correct,Q3=incorrect,Q5=correct' }] },
         { type: 1, components: [{ type: 4, customId: 'feedback', label: 'Feedback for user (optional)', style: 2, required: false, maxLength: 1000 }] },
       ]
     });
@@ -414,17 +436,48 @@ async function handleModal(i: any): Promise<void> {
 
   else if (action === 'modal_override') {
     await i.deferReply({ ephemeral: true });
-    const resultId    = parseInt(rest[0]);
-    const scoreRaw    = i.fields.getTextInputValue('score').trim();
-    const passedRaw   = i.fields.getTextInputValue('passed').trim().toLowerCase();
-    const feedback    = i.fields.getTextInputValue('feedback').trim() || null;
-    const [result]    = await sql`SELECT * FROM assessment_results WHERE id = ${resultId}`;
+    const resultId       = parseInt(rest[0]);
+    const scoreRaw       = i.fields.getTextInputValue('score').trim();
+    const passedRaw      = i.fields.getTextInputValue('passed').trim().toLowerCase();
+    const feedback       = i.fields.getTextInputValue('feedback').trim() || null;
+    const qOverridesRaw  = i.fields.getTextInputValue('question_overrides').trim();
+    const [result]       = await sql`SELECT * FROM assessment_results WHERE id = ${resultId}`;
     if (!result) { await i.editReply({ embeds: [errorEmbed('Not found.')] }); return; }
 
-    const overrideScore  = scoreRaw ? parseInt(scoreRaw) : null;
-    const overridePassed = passedRaw === 'yes' ? true : passedRaw === 'no' ? false : null;
+    // Process per-question overrides e.g. "Q1=correct,Q3=incorrect"
+    if (qOverridesRaw) {
+      const responses = await sql`
+        SELECT r.id FROM assessment_responses r
+        WHERE r.session_id = ${result.session_id} ORDER BY r.answered_at ASC
+      `;
+      const parts = qOverridesRaw.split(',');
+      for (const part of parts) {
+        const match = part.trim().match(/^Q(\d+)=(correct|incorrect)$/i);
+        if (match) {
+          const qIdx = parseInt(match[1]) - 1;
+          const isCorrect = match[2].toLowerCase() === 'correct';
+          if (responses[qIdx]) {
+            await sql`UPDATE assessment_responses SET override_correct = ${isCorrect} WHERE id = ${responses[qIdx].id}`;
+          }
+        }
+      }
+      // Recalculate score from overrides
+      const allResponses = await sql`SELECT is_correct, override_correct FROM assessment_responses WHERE session_id = ${result.session_id}`;
+      let newScore = 0;
+      for (const r of allResponses) {
+        const ok = r.override_correct !== null ? r.override_correct : r.is_correct;
+        if (ok) newScore++;
+      }
+      const newPct    = Math.round((newScore / result.total) * 100);
+      const [assessment] = await sql`SELECT pass_threshold FROM assessments WHERE id = ${result.assessment_id}`;
+      const newPassed = newPct >= assessment.pass_threshold;
+      await sql`UPDATE assessment_results SET hpa_override_score = ${newScore}, hpa_override_passed = ${newPassed}, hpa_reviewed = true, hpa_feedback = ${feedback} WHERE id = ${resultId}`;
+    } else {
+      const overrideScore  = scoreRaw ? parseInt(scoreRaw) : null;
+      const overridePassed = passedRaw === 'yes' ? true : passedRaw === 'no' ? false : null;
+      await sql`UPDATE assessment_results SET hpa_override_score = ${overrideScore}, hpa_override_passed = ${overridePassed}, hpa_reviewed = true, hpa_feedback = ${feedback} WHERE id = ${resultId}`;
+    }
 
-    await sql`UPDATE assessment_results SET hpa_override_score = ${overrideScore}, hpa_override_passed = ${overridePassed}, hpa_feedback = ${feedback}, hpa_reviewed = true WHERE id = ${resultId}`;
     await sendFinalResult(i.client, result.user_id, resultId);
     await i.editReply({ embeds: [successEmbed('Override Applied', 'Result updated and sent to user.')] });
   }

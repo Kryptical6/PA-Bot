@@ -2,7 +2,7 @@ import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, StringSe
 import { sql } from '../../database/client';
 import { errorEmbed, infoEmbed } from '../../utils/embeds';
 import { isPA } from '../../utils/permissions';
-import { startAssessmentSession, sendQuestion } from '../../services/assessmentService';
+import { startAssessmentSession, sendQuestion, sendRetakeRequest } from '../../services/assessmentService';
 import { config } from '../../config';
 import { dmUser } from '../../services/dmService';
 
@@ -42,28 +42,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
         return;
       }
       const [req] = await sql`INSERT INTO retake_requests (user_id, assessment_id) VALUES (${userId}, ${assessmentId}) RETURNING id`;
-      try {
-        const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
-        const embed = new EmbedBuilder()
-          .setColor(Colors.Orange)
-          .setTitle('🔄 Retake Request')
-          .addFields(
-            { name: 'User', value: `<@${userId}>`, inline: true },
-            { name: 'Assessment', value: assessment.title, inline: true },
-          )
-          .setFooter({ text: `Request ID: ${req.id}` })
-          .setTimestamp();
-
-        const approveBtn = new ButtonBuilder().setCustomId(`retake_approve:${req.id}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success);
-        const denyBtn    = new ButtonBuilder().setCustomId(`retake_deny:${req.id}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger);
-        const reasonBtn  = new ButtonBuilder().setCustomId(`retake_reason:${req.id}`).setLabel('❓ Ask for Reason').setStyle(ButtonStyle.Secondary);
-
-        await ch.send({
-          content: `<@&${config.roles.HPA}>`,
-          embeds: [embed],
-          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approveBtn, denyBtn, reasonBtn)]
-        });
-      } catch (e) { console.error('Failed to send retake request:', e); }
+      await sendRetakeRequest(i.client, userId, assessmentId, assessment.title, req.id);
       await sel.update({ embeds: [infoEmbed('Retake Requested', 'Your retake request has been sent to HPA.')], components: [] });
       return;
     }
