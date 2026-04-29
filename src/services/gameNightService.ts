@@ -19,23 +19,25 @@ export async function updateScheduleEmbed(client: Client): Promise<void> {
     const embed = new EmbedBuilder()
       .setColor(Colors.Purple)
       .setTitle('🎮 Game Night Schedule')
-      .setTimestamp();
+      .setTimestamp()
+      .setFooter({ text: `${nights.length} upcoming event${nights.length !== 1 ? 's' : ''}` });
 
     if (nights.length === 0) {
-      embed.setDescription('No upcoming game nights. Stay tuned!');
+      embed.setDescription('No upcoming game nights scheduled.\nCheck back soon!');
     } else {
-      embed.setDescription(
-        nights.map((n: any) => {
-          const games = Array.isArray(n.games) ? n.games.join(', ') : n.games;
-          return [
-            `**${n.title}**`,
-            `📅 <t:${Math.floor(new Date(n.scheduled_at).getTime() / 1000)}:F>`,
-            `🎮 ${games}`,
-            `🎙️ Hosted by <@${n.host}>`,
-            n.description ? `📝 ${n.description}` : null,
-          ].filter(Boolean).join('\n');
-        }).join('\n\n')
-      );
+      const sections = nights.map((n: any, idx: number) => {
+        const games = Array.isArray(n.games) ? n.games.map((g: string) => `• ${g}`).join('\n') : `• ${n.games}`;
+        const ts = Math.floor(new Date(n.scheduled_at).getTime() / 1000);
+        const lines = [
+          `### ${idx + 1}. ${n.title}`,
+          `📅 <t:${ts}:F>  ·  <t:${ts}:R>`,
+          `🎮 Games:\n${games}`,
+          `🎙️ Host: <@${n.host}>`,
+        ];
+        if (n.description) lines.push(`📝 ${n.description}`);
+        return lines.join('\n');
+      });
+      embed.setDescription(sections.join('\n\n─────────────────────\n\n'));
     }
 
     // Try edit existing
