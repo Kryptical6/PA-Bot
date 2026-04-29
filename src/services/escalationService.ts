@@ -38,6 +38,23 @@ export async function checkEscalation(client: Client, userId: string): Promise<v
     await sql`INSERT INTO logs (user_id, type, reason, logged_by, expires_at) VALUES (${userId}, 'strike', 'Automatic escalation', 'system', ${exp.toISOString()})`;
 
     await safeDM(client, userId, warningEmbed('Strike Issued', 'You have received a strike.'), 'escalation strike');
+
+    // Notify HPA to optionally send an explanation DM
+    try {
+      const { TextChannel, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder } = await import('discord.js');
+      const ch = await client.channels.fetch(config.channels.hpaReview) as TextChannel;
+      const embed = new EmbedBuilder()
+        .setColor(Colors.Red)
+        .setTitle('⚡ Automatic Escalation Strike')
+        .setDescription(`<@${userId}> has been automatically issued a strike after reaching the escalation threshold (${rate} mistakes).`)
+        .setTimestamp();
+      const btn = new ButtonBuilder()
+        .setCustomId(`escalation_dm:${userId}`)
+        .setLabel('📨 Send Explanation DM')
+        .setStyle(ButtonStyle.Primary);
+      await ch.send({ embeds: [embed], components: [new ActionRowBuilder<typeof btn>().addComponents(btn)] });
+    } catch { /* silent */ }
+
     await updateLogTracker(client);
   }
 }

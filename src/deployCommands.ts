@@ -20,6 +20,11 @@ import { data as editTag } from './commands/spa/edit_tag';
 import { data as deleteTag } from './commands/spa/delete_tag';
 import { data as createEmbed } from './commands/spa/create_embed';
 import { data as editEmbed } from './commands/spa/edit_embed';
+import { data as editGameNight } from './commands/spa/edit_game_night';
+import { data as suggestGame } from './commands/shared/suggest_game';
+import { data as viewSuggestions } from './commands/shared/view_suggestions';
+import { data as createGameNight } from './commands/hpa/create_game_night';
+import { data as cancelGameNight } from './commands/hpa/cancel_game_night';
 import { data as forceStrike } from './commands/hpa/force_strike';
 import { data as manageLog } from './commands/hpa/manage_log';
 import { data as setEscalation } from './commands/hpa/set_escalation';
@@ -39,9 +44,11 @@ import { data as approveRetake } from './commands/hpa/approve_retake';
 
 const commands = [
   help, myLogs, appeal, tag, tagSearch, paAssessment,
-  logMistake, staffProfile, staffOverview, lookupPost, warnUser, createVote, listAssessments, createTag, editTag, deleteTag, createEmbed, editEmbed,
+  logMistake, staffProfile, staffOverview, lookupPost, warnUser, createVote, listAssessments, createTag, editTag, deleteTag, createEmbed, editEmbed, editGameNight,
   forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser, bulkActions, manageLogTracker,
   createAssessment, createAssessmentQ, editAssessmentQ, deleteAssessmentQ, publishAssessment, restrictAssessment, viewResults, viewSessions, approveRetake,
+  suggestGame, viewSuggestions,
+  createGameNight, cancelGameNight,
 ].map(c => c.toJSON());
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN!);

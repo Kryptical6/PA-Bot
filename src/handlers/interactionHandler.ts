@@ -28,6 +28,12 @@ import * as editTag from '../commands/spa/edit_tag';
 import * as deleteTag from '../commands/spa/delete_tag';
 import * as createEmbed from '../commands/spa/create_embed';
 import * as editEmbed from '../commands/spa/edit_embed';
+import * as editGameNight from '../commands/spa/edit_game_night';
+import * as suggestGame from '../commands/shared/suggest_game';
+import * as viewSuggestions from '../commands/shared/view_suggestions';
+import * as createGameNight from '../commands/hpa/create_game_night';
+import * as cancelGameNight from '../commands/hpa/cancel_game_night';
+import { updateScheduleEmbed, buildGameNightEmbed } from '../services/gameNightService';
 import * as forceStrike from '../commands/hpa/force_strike';
 import * as manageLog from '../commands/hpa/manage_log';
 import * as setEscalation from '../commands/hpa/set_escalation';
@@ -51,6 +57,9 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   lookup_post: lookupPost, warn_user: warnUser, create_vote: createVote,
   list_assessments: listAssessments, create_tag: createTag, edit_tag: editTag, delete_tag: deleteTag,
   create_embed: createEmbed, edit_embed: editEmbed,
+  suggest_game: suggestGame, view_suggestions: viewSuggestions,
+  edit_game_night: editGameNight,
+  create_game_night: createGameNight, cancel_game_night: cancelGameNight,
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
   manage_log_tracker: manageLogTracker, create_assessment: createAssessment,
@@ -90,6 +99,10 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
 async function handleButton(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
+  // Game night buttons
+  const gameNightActions = ['gs_approve', 'gs_deny', 'gs_upvote', 'gn_rsvp', 'gn_list'];
+  if (gameNightActions.includes(action)) { await handleGameNightButton(i); return; }
+
   // Pending log review
   if (action === 'log_approve') {
     const m = i.member as GuildMember;
@@ -108,25 +121,35 @@ async function handleButton(i: any): Promise<void> {
     if (!isHPA(m)) return;
     const type = rest[0] as 'mistake' | 'strike';
     const pendingId = parseInt(rest[1]);
-    const [pending] = await sql`SELECT * FROM pending_logs WHERE id = ${pendingId}`;
-    if (!pending) { await i.update({ content: '❌ Not found.', components: [] }); return; }
+    const pendingRows = await sql`SELECT * FROM pending_logs WHERE id = ${pendingId}`;
+    if (pendingRows.length === 0) { await i.update({ content: '❌ Not found.', components: [] }); return; }
+    const pending = pendingRows[0];
 
     const exp = new Date(); exp.setDate(exp.getDate() + config.expiry.defaultDays);
     await sql`INSERT INTO logs (user_id, type, reason, post_id, logged_by, date, expires_at) VALUES (${pending.user_id}, ${type}, ${pending.reason}, ${pending.post_id}, ${pending.logged_by}, ${pending.date}, ${exp.toISOString()})`;
     await sql`DELETE FROM pending_logs WHERE id = ${pendingId}`;
 
-    // Delete the original review embed
-    try { await i.message.delete(); } catch { /* silent */ }
+    // Update the embed to show result, remove buttons
+    const resultEmbed = new EmbedBuilder()
+      .setColor(type === 'mistake' ? Colors.Orange : Colors.Red)
+      .setTitle(`${type === 'mistake' ? '⚠️ Mistake Logged' : '❌ Strike Logged'}`)
+      .setDescription(`**Post ID:** \`${pending.post_id}\`\nLogged for <@${pending.user_id}>\n\n**Reason:** ${pending.reason}`)
+      .setFooter({ text: `Logged by ${i.user.tag}` })
+      .setTimestamp();
+    try { await i.message.edit({ embeds: [resultEmbed], components: [] }); } catch { /* silent */ }
 
     // DM logger
-    await safeDM(i.client, pending.logged_by, successEmbed('Log Approved', `Your log against <@${pending.user_id}> was approved.`), 'log approved');
+    await safeDM(i.client, pending.logged_by, successEmbed('Log Approved', `Your log against <@${pending.user_id}> was approved as a **${type}**.`), 'log approved');
 
     // DM user if strike
     if (type === 'strike') {
       await safeDM(i.client, pending.user_id, warningEmbed('Strike Issued', `You received a strike.\n\n**Reason:** ${pending.reason}\n**Date:** ${pending.date}`), 'strike');
     }
 
-    if (type === 'mistake') await checkEscalation(i.client, pending.user_id);
+    if (type === 'mistake') {
+      await checkEscalation(i.client, pending.user_id);
+      await sendMilestoneDM(i.client, pending.user_id);
+    }
     await updateLogTracker(i.client);
     await i.update({ content: `✅ Logged as **${type}**.`, components: [] });
   }
@@ -250,6 +273,24 @@ async function handleButton(i: any): Promise<void> {
     else await finalizeAssessment(i.client, i.user.id, sessionId, false);
   }
 
+  else if (action === 'escalation_dm') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const targetId = rest[0];
+    await i.showModal({
+      customId: `modal_escalation_dm:${targetId}`,
+      title: 'Send Escalation Explanation',
+      components: [{
+        type: 1,
+        components: [{
+          type: 4, customId: 'message', label: 'Message to send the user',
+          style: 2, required: true, minLength: 5, maxLength: 1000,
+          placeholder: 'Explain why they received the strike...'
+        }]
+      }]
+    });
+  }
+
   // Retake requests
   else if (action === 'retake_approve') {
     const m = i.member as GuildMember;
@@ -351,6 +392,108 @@ async function handleButton(i: any): Promise<void> {
       const ok = r.override_correct ?? r.is_correct;
       embed.addFields({ name: `Q${idx + 1}: \`${r.post_id}\` ${ok ? '✅' : '❌'}`, value: [`Your answer: **${r.action}**`, r.reason ? `Your reason: ${r.reason}` : null, `Correct: **${r.correct_answer}**`, r.keywords ? `Expected: ${r.keywords}` : null].filter(Boolean).join('\n') });
     });
+    await i.reply({ embeds: [embed], ephemeral: true });
+  }
+}
+
+// ─── GAME NIGHT BUTTONS ───────────────────────────────────────────────────────
+async function handleGameNightButton(i: any): Promise<void> {
+  const [action, ...rest] = i.customId.split(':');
+
+  if (action === 'gs_approve') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const suggId = parseInt(rest[0]);
+    const suggestions = await sql`SELECT * FROM game_suggestions WHERE id = ${suggId}`;
+    if (suggestions.length === 0) { await i.reply({ embeds: [errorEmbed('Not found.')], ephemeral: true }); return; }
+    const s = suggestions[0];
+
+    await sql`UPDATE game_suggestions SET status = 'approved' WHERE id = ${suggId}`;
+
+    // Post in suggestions channel with upvote button
+    try {
+      const ch = await i.client.channels.fetch(config.channels.gameSuggestions) as TextChannel;
+      const embed = new EmbedBuilder()
+        .setColor(Colors.Purple)
+        .setTitle(`🎮 ${s.game_name}`)
+        .setDescription(s.description ?? 'No description provided.')
+        .addFields({ name: 'Suggested by', value: `<@${s.suggested_by}>`, inline: true }, { name: '👍 Upvotes', value: '0', inline: true })
+        .setFooter({ text: `ID: ${suggId}` })
+        .setTimestamp();
+      const btn = new ButtonBuilder().setCustomId(`gs_upvote:${suggId}`).setLabel('👍 Upvote').setStyle(ButtonStyle.Primary);
+      const msg = await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(btn)] });
+      await sql`UPDATE game_suggestions SET message_id = ${msg.id} WHERE id = ${suggId}`;
+    } catch (e) { console.error('Failed to post approved suggestion:', e); }
+
+    await i.update({ components: [] });
+    await i.followUp({ embeds: [successEmbed('Approved', `**${s.game_name}** has been approved and posted.`)], ephemeral: true });
+  }
+
+  else if (action === 'gs_deny') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const suggId = parseInt(rest[0]);
+    await sql`UPDATE game_suggestions SET status = 'denied' WHERE id = ${suggId}`;
+    await i.update({ components: [] });
+    await i.followUp({ embeds: [successEmbed('Denied', 'Suggestion denied.')], ephemeral: true });
+  }
+
+  else if (action === 'gs_upvote') {
+    const suggId = parseInt(rest[0]);
+    const existing = await sql`SELECT 1 FROM game_suggestion_upvotes WHERE suggestion_id = ${suggId} AND user_id = ${i.user.id}`;
+    if (existing.length > 0) {
+      await i.reply({ content: 'You have already upvoted this suggestion.', ephemeral: true });
+      return;
+    }
+    await sql`INSERT INTO game_suggestion_upvotes (suggestion_id, user_id) VALUES (${suggId}, ${i.user.id})`;
+    await sql`UPDATE game_suggestions SET upvotes = upvotes + 1 WHERE id = ${suggId}`;
+
+    // Update embed
+    const [s] = await sql`SELECT * FROM game_suggestions WHERE id = ${suggId}`;
+    try {
+      const embed = EmbedBuilder.from(i.message.embeds[0]);
+      const fields = embed.data.fields?.map((f: any) => f.name === '👍 Upvotes' ? { ...f, value: String(s.upvotes) } : f) ?? [];
+      embed.setFields(fields);
+      await i.message.edit({ embeds: [embed] });
+    } catch { /* silent */ }
+
+    await i.reply({ content: '👍 Upvoted!', ephemeral: true });
+  }
+
+  else if (action === 'gn_rsvp') {
+    const nightId  = parseInt(rest[0]);
+    const attending = rest[1] === 'yes';
+
+    await sql`
+      INSERT INTO game_night_rsvps (game_night_id, user_id, attending)
+      VALUES (${nightId}, ${i.user.id}, ${attending})
+      ON CONFLICT (game_night_id, user_id) DO UPDATE SET attending = ${attending}
+    `;
+
+    // Update the announcement embed
+    try {
+      const { embed, row } = await buildGameNightEmbed(nightId);
+      await i.message.edit({ embeds: [embed], components: [row] });
+    } catch { /* silent */ }
+
+    await i.reply({ content: attending ? '✅ You are marked as attending!' : '❌ You are marked as not attending.', ephemeral: true });
+  }
+
+  else if (action === 'gn_list') {
+    const nightId = parseInt(rest[0]);
+    const rsvps = await sql`SELECT * FROM game_night_rsvps WHERE game_night_id = ${nightId}`;
+    const attending    = rsvps.filter((r: any) => r.attending).map((r: any) => `<@${r.user_id}>`);
+    const notAttending = rsvps.filter((r: any) => !r.attending).map((r: any) => `<@${r.user_id}>`);
+
+    const embed = new EmbedBuilder()
+      .setColor(Colors.Purple)
+      .setTitle('👥 RSVP List')
+      .addFields(
+        { name: `✅ Attending (${attending.length})`,     value: attending.length > 0 ? attending.join('\n') : 'None', inline: true },
+        { name: `❌ Not Attending (${notAttending.length})`, value: notAttending.length > 0 ? notAttending.join('\n') : 'None', inline: true },
+      )
+      .setTimestamp();
+
     await i.reply({ embeds: [embed], ephemeral: true });
   }
 }
@@ -543,6 +686,53 @@ async function handleModal(i: any): Promise<void> {
     await sendFinalResult(i.client, result.user_id, resultId);
     await i.editReply({ embeds: [successEmbed('Override Applied', 'Result updated and sent to user.')] });
   }
+
+  else if (action === 'modal_escalation_dm') {
+    await i.deferReply({ ephemeral: true });
+    const targetId = rest[0];
+    const message  = i.fields.getTextInputValue('message').trim();
+    try {
+      const user = await i.client.users.fetch(targetId);
+      const dm   = await user.createDM();
+      await dm.send({ embeds: [warningEmbed('Strike Explanation', message)] });
+      await i.editReply({ embeds: [successEmbed('Sent', `Explanation DM sent to <@${targetId}>.`)] });
+      try { await i.message.edit({ components: [] }); } catch { /* silent */ }
+    } catch {
+      await i.editReply({ embeds: [errorEmbed('Failed to DM user. They may have DMs disabled.')] });
+    }
+  }
+
+  else if (action === 'gn_edit_modal') {
+    await i.deferReply({ ephemeral: true });
+    const nightId = parseInt(rest[0]);
+    const title   = i.fields.getTextInputValue('title').trim();
+    const dateStr = i.fields.getTextInputValue('date').trim();
+    const gamesRaw = i.fields.getTextInputValue('games').trim();
+    const desc    = i.fields.getTextInputValue('description').trim() || null;
+
+    const scheduledAt = new Date(dateStr);
+    if (isNaN(scheduledAt.getTime())) {
+      await i.editReply({ embeds: [errorEmbed('Invalid date. Use YYYY-MM-DD HH:MM.')] });
+      return;
+    }
+
+    const games = gamesRaw.split(',').map((g: string) => g.trim()).filter(Boolean);
+    await sql`UPDATE game_nights SET title = ${title}, scheduled_at = ${scheduledAt.toISOString()}, games = ${games}, description = ${desc} WHERE id = ${nightId}`;
+
+    // Update announcement embed if it exists
+    const nights = await sql`SELECT * FROM game_nights WHERE id = ${nightId}`;
+    if (nights.length > 0 && nights[0].announcement_message_id) {
+      try {
+        const ch = await i.client.channels.fetch(config.channels.gameNightSchedule) as TextChannel;
+        const msg = await ch.messages.fetch(nights[0].announcement_message_id);
+        const { embed, row } = await buildGameNightEmbed(nightId);
+        await msg.edit({ embeds: [embed], components: [row] });
+      } catch { /* silent */ }
+    }
+
+    await updateScheduleEmbed(i.client);
+    await i.editReply({ embeds: [successEmbed('Updated', `Game night #${nightId} updated.`)] });
+  }
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -565,4 +755,30 @@ async function submitAssessmentAnswer(i: any, sessionId: number, questionId: num
   } catch { /* silent */ }
 
   await sendQuestion(i.client, session.user_id, sessionId, session.assessment_id, order, newIndex);
+}
+
+// ─── MILESTONE DM ────────────────────────────────────────────────────────────
+async function sendMilestoneDM(client: any, userId: string): Promise<void> {
+  const rows = await sql`SELECT COUNT(*) as count FROM logs WHERE user_id = ${userId} AND type = 'mistake' AND expires_at > NOW()`;
+  const count = parseInt(rows[0].count);
+  if (count === 0 || count % 5 !== 0) return;
+
+  const rateRows = await sql`SELECT rate FROM escalation_config WHERE id = 1`;
+  const rate = rateRows[0]?.rate ?? 3;
+  const remaining = Math.max(0, rate - (count % rate || rate));
+
+  const embed = new EmbedBuilder()
+    .setColor(Colors.Orange)
+    .setTitle('⚠️ Mistake Notification')
+    .setDescription(
+      `You currently have **${count} active mistake(s)**.\n\n` +
+      (remaining > 0 ? `You are **${remaining} mistake(s) away** from receiving a strike.` : 'You are at the escalation threshold.')
+    )
+    .setTimestamp();
+
+  try {
+    const user = await client.users.fetch(userId);
+    const dm = await user.createDM();
+    await dm.send({ embeds: [embed] });
+  } catch { /* silent */ }
 }
