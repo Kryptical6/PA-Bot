@@ -55,7 +55,6 @@ import * as publishAssessment from '../commands/hpa/publish_assessment';
 import * as restrictAssessment from '../commands/hpa/restrict_assessment';
 import * as viewResults from '../commands/hpa/view_assessment_results';
 import * as viewSessions from '../commands/hpa/view_active_sessions';
-import * as approveRetake from '../commands/hpa/approve_retake';
 
 const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Promise<void> }> = {
   help, my_logs: myLogs, appeal, tag, tag_search: tagSearch, pa_assessment: paAssessment,
@@ -74,7 +73,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   create_assessment_question: createAssessmentQ, edit_assessment_question: editAssessmentQ,
   delete_assessment_question: deleteAssessmentQ, publish_assessment: publishAssessment,
   restrict_assessment: restrictAssessment, view_assessment_results: viewResults,
-  view_active_sessions: viewSessions, approve_retake: approveRetake,
+  view_active_sessions: viewSessions,
 };
 
 export async function handleInteraction(interaction: Interaction): Promise<void> {

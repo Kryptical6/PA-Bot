@@ -43,7 +43,6 @@ import { data as publishAssessment }    from './commands/hpa/publish_assessment'
 import { data as restrictAssessment }   from './commands/hpa/restrict_assessment';
 import { data as viewResults }          from './commands/hpa/view_assessment_results';
 import { data as viewSessions }         from './commands/hpa/view_active_sessions';
-import { data as approveRetake }        from './commands/hpa/approve_retake';
 import { data as createGameNight }      from './commands/hpa/create_game_night';
 import { data as cancelGameNight }      from './commands/hpa/cancel_game_night';
 import { data as deleteSuggestion }     from './commands/hpa/delete_suggestion';
@@ -61,7 +60,7 @@ const commands = [
   forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser, bulkActions,
   manageLogTracker, createAssessment, createAssessmentQ, editAssessmentQ,
   deleteAssessmentQ, publishAssessment, restrictAssessment, viewResults,
-  viewSessions, approveRetake, createGameNight, cancelGameNight, deleteSuggestion, clearStale,
+  viewSessions, createGameNight, cancelGameNight, deleteSuggestion, clearStale,
 ].map(c => c.toJSON());
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN!);

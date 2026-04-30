@@ -55,7 +55,6 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/restrict_assessment` - Restrict assessment access',
     '`/view_assessment_results` - View user results',
     '`/view_active_sessions` - See in-progress sessions',
-    '`/approve_retake` - Action a retake request',
     '`/create_game_night` - Schedule a game night',
     '`/cancel_game_night` - Cancel a game night',
     '`/delete_suggestion` - Remove a game suggestion',
