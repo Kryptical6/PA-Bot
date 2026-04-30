@@ -605,18 +605,32 @@ async function handleSelect(i: any): Promise<void> {
   if (action === 'esc_action_select') {
     const selectedAction = i.values[0];
     const actionTitles: Record<string, string> = {
-      review_post:       'Review My Post',
-      revoke_skill_role: 'Revoke a Skill Role',
-      takeover_post:     'Take-over This Post',
+      review_post:        'Review My Post',
+      revoke_skill_role:  'Revoke a Skill Role',
+      takeover_post:      'Take-over This Post',
+      punishment_request: 'Punishment Request',
     };
-    await i.showModal({
-      customId: `escalate_modal:${selectedAction}`,
-      title: actionTitles[selectedAction] ?? 'Escalate Post',
-      components: [
-        { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Post ID', style: 1, required: true, maxLength: 200 }] },
-        { type: 1, components: [{ type: 4, customId: 'information', label: 'Information / Context', style: 2, required: true, minLength: 10, maxLength: 1000 }] },
-      ]
-    });
+
+    if (selectedAction === 'punishment_request') {
+      await i.showModal({
+        customId: `escalate_modal:punishment_request`,
+        title: 'Punishment Request (Code/Scripts Only)',
+        components: [
+          { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Post ID', style: 1, required: true, maxLength: 200 }] },
+          { type: 1, components: [{ type: 4, customId: 'information', label: 'Reasoning', style: 2, required: true, minLength: 10, maxLength: 1000, placeholder: 'Please make sure the evidence you are providing clearly highlights the faults.' }] },
+          { type: 1, components: [{ type: 4, customId: 'evidence', label: 'Evidence Links (one per line)', style: 2, required: false, maxLength: 1000, placeholder: 'https://imgur.com/...\nhttps://imgur.com/...' }] },
+        ]
+      });
+    } else {
+      await i.showModal({
+        customId: `escalate_modal:${selectedAction}`,
+        title: actionTitles[selectedAction] ?? 'Escalate Post',
+        components: [
+          { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Post ID', style: 1, required: true, maxLength: 200 }] },
+          { type: 1, components: [{ type: 4, customId: 'information', label: 'Information / Context', style: 2, required: true, minLength: 10, maxLength: 1000 }] },
+        ]
+      });
+    }
     return;
   }
 
@@ -853,13 +867,15 @@ async function handleModal(i: any): Promise<void> {
   }
 
   else if (action === 'escalate_modal') {
-    // action type is in rest[0]
     const actionType  = rest[0];
     await i.deferReply({ ephemeral: true });
 
     const postId      = i.fields.getTextInputValue('post_id').trim();
     const information = i.fields.getTextInputValue('information').trim();
-    const m           = i.member as GuildMember;
+    const evidence    = actionType === 'punishment_request'
+      ? (i.fields.getTextInputValue('evidence').trim() || null)
+      : null;
+    const m = i.member as GuildMember;
 
     const existing = await sql`SELECT 1 FROM post_escalations WHERE post_id = ${postId} AND status IN ('pending','claimed')`;
     if (existing.length > 0) {
@@ -867,9 +883,14 @@ async function handleModal(i: any): Promise<void> {
       return;
     }
 
+    // Build full information string - append evidence if present
+    const fullInfo = evidence
+      ? `${information}\n\n**Evidence:**\n${evidence}`
+      : information;
+
     const [result] = await sql`
       INSERT INTO post_escalations (post_id, submitted_by, information, action)
-      VALUES (${postId}, ${i.user.id}, ${information}, ${actionType})
+      VALUES (${postId}, ${i.user.id}, ${fullInfo}, ${actionType})
       RETURNING id
     `;
 
@@ -878,8 +899,10 @@ async function handleModal(i: any): Promise<void> {
     const embed = buildEscalationEmbed(esc);
     const row   = buildPendingRow(result.id);
 
-    const submitterIsSPA = isSPA(m);
-    const pingRole = submitterIsSPA ? `<@&${config.roles.HPA}>` : `<@&${config.roles.SPA}>`;
+    // Punishment requests ping HPA, all others ping SPA
+    const pingRole = actionType === 'punishment_request'
+      ? `<@&${config.roles.HPA}>`
+      : `<@&${config.roles.SPA}>`;
 
     try {
       const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
