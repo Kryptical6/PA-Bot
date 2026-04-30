@@ -4,6 +4,7 @@ import { processExpiredVotes } from '../services/voteService';
 import { checkPendingLogReminders } from '../services/reminderService';
 import { cancelExpiredAssessmentSessions } from '../services/assessmentExpiryService';
 import { sendGameNightReminders } from '../services/gameNightService';
+import { checkFeedbackReminders } from '../services/feedbackService';
 
 async function runAll(client: Client): Promise<void> {
   try {
@@ -13,6 +14,7 @@ async function runAll(client: Client): Promise<void> {
     await checkPendingLogReminders(client);
     await cancelExpiredAssessmentSessions(client);
     await sendGameNightReminders(client);
+    await checkFeedbackReminders(client);
   } catch (e) { console.error('Scheduler error:', e); }
 }
 

@@ -1,7 +1,7 @@
 import { Interaction, ChatInputCommandInteraction, GuildMember, TextChannel, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { sql } from '../database/client';
 import { config } from '../config';
-import { isHPA, isSPA } from '../utils/permissions';
+import { isHPA, isSPA, isPA } from '../utils/permissions';
 import { successEmbed, errorEmbed, warningEmbed, pendingLogEmbed, infoEmbed } from '../utils/embeds';
 import { safeDM, dmUser } from '../services/dmService';
 import { checkEscalation } from '../services/escalationService';
@@ -36,6 +36,12 @@ import { buildEscalationEmbed, buildPendingRow, buildClaimedRow } from '../comma
 import * as suggestGame from '../commands/shared/suggest_game';
 import * as viewSuggestions from '../commands/shared/view_suggestions';
 import * as createGameNight from '../commands/hpa/create_game_night';
+import * as createFeedback from '../commands/hpa/create_feedback';
+import * as closeFeedback from '../commands/hpa/close_feedback';
+import * as suggest from '../commands/shared/suggest';
+import * as searchSuggestions from '../commands/spa/search_suggestions';
+import { buildFeedbackEmbed, buildFeedbackRow, buildResponseEmbed, buildSubmittedEmbed } from '../services/feedbackService';
+import { buildSuggestionEmbed, buildPendingSuggestionRow, buildConsideredRow } from '../commands/shared/suggest';
 import * as cancelGameNight from '../commands/hpa/cancel_game_night';
 import * as deleteSuggestion from '../commands/hpa/delete_suggestion';
 import * as clearStale from '../commands/hpa/clear_stale';
@@ -67,6 +73,8 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   edit_game_night: editGameNight,
   create_game_night: createGameNight, cancel_game_night: cancelGameNight,
   delete_suggestion: deleteSuggestion, clear_stale: clearStale,
+  create_feedback: createFeedback, close_feedback: closeFeedback,
+  suggest, search_suggestions: searchSuggestions,
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
   manage_log_tracker: manageLogTracker, create_assessment: createAssessment,
@@ -114,6 +122,13 @@ async function handleButton(i: any): Promise<void> {
   const escalationActions = ['esc_claim', 'esc_withdraw', 'esc_handle', 'esc_reject', 'esc_escalate_hpa'];
   if (escalationActions.includes(action)) { await handleEscalationButton(i, action, rest); return; }
 
+  // Feedback buttons
+  if (action === 'fb_start' || action === 'fb_confirm' || action === 'fb_edit') { await handleFeedbackButton(i, action, rest); return; }
+
+  // Suggestion buttons
+  const suggestionActions = ['sug_consider', 'sug_reject', 'sug_implement', 'sug_decline'];
+  if (suggestionActions.includes(action)) { await handleSuggestionButton(i, action, rest); return; }
+
   // Pending log review
   if (action === 'log_approve') {
     const m = i.member as GuildMember;
@@ -122,9 +137,46 @@ async function handleButton(i: any): Promise<void> {
     const [pending] = await sql`SELECT * FROM pending_logs WHERE id = ${pendingId}`;
     if (!pending) { await i.reply({ embeds: [errorEmbed('Pending log not found.')], ephemeral: true }); return; }
 
-    const mistakeBtn = new ButtonBuilder().setCustomId(`log_as:mistake:${pendingId}`).setLabel('Log as Mistake').setStyle(ButtonStyle.Primary);
-    const strikeBtn  = new ButtonBuilder().setCustomId(`log_as:strike:${pendingId}`).setLabel('Log as Strike').setStyle(ButtonStyle.Danger);
-    await i.reply({ content: 'Log as **Mistake** or **Strike**?', components: [new ActionRowBuilder<ButtonBuilder>().addComponents(mistakeBtn, strikeBtn)], ephemeral: true });
+    const mistakeBtn = new ButtonBuilder().setCustomId(`log_as:mistake:${pendingId}`).setLabel('⚠️ Mistake').setStyle(ButtonStyle.Primary);
+    const strikeBtn  = new ButtonBuilder().setCustomId(`log_as:strike:${pendingId}`).setLabel('❌ Strike').setStyle(ButtonStyle.Danger);
+    const cancelBtn  = new ButtonBuilder().setCustomId(`log_cancel:${pendingId}`).setLabel('↩️ Cancel').setStyle(ButtonStyle.Secondary);
+
+    const updatedEmbed = pendingLogEmbed({
+      userId: pending.user_id,
+      postId: pending.post_id,
+      reason: pending.reason,
+      loggedBy: pending.logged_by,
+      date: typeof pending.date === 'string' ? pending.date.split('T')[0] : new Date(pending.date).toISOString().split('T')[0],
+      pendingId,
+    }).setColor(Colors.Green).setTitle('📋 Choose Log Type');
+
+    await i.update({
+      embeds: [updatedEmbed],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(mistakeBtn, strikeBtn, cancelBtn)],
+    });
+  }
+
+  else if (action === 'log_cancel') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) return;
+    const pendingId = parseInt(rest[0]);
+    const [pending] = await sql`SELECT * FROM pending_logs WHERE id = ${pendingId}`;
+    if (!pending) { await i.update({ content: '❌ Not found.', components: [] }); return; }
+
+    const approve = new ButtonBuilder().setCustomId(`log_approve:${pendingId}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success);
+    const editBtn = new ButtonBuilder().setCustomId(`log_edit:${pendingId}`).setLabel('✏️ Edit Reason').setStyle(ButtonStyle.Primary);
+    const deny    = new ButtonBuilder().setCustomId(`log_deny:${pendingId}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger);
+
+    const originalEmbed = pendingLogEmbed({
+      userId: pending.user_id,
+      postId: pending.post_id,
+      reason: pending.reason,
+      loggedBy: pending.logged_by,
+      date: typeof pending.date === 'string' ? pending.date.split('T')[0] : new Date(pending.date).toISOString().split('T')[0],
+      pendingId,
+    });
+
+    await i.update({ embeds: [originalEmbed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, deny)] });
   }
 
   else if (action === 'log_as') {
@@ -607,6 +659,148 @@ async function handleGameNightButton(i: any): Promise<void> {
 }
 
 // ─── SELECT HANDLER ───────────────────────────────────────────────────────────
+// ─── FEEDBACK BUTTONS ─────────────────────────────────────────────────────────
+async function handleFeedbackButton(i: any, action: string, rest: string[]): Promise<void> {
+  const roundId = parseInt(rest[0]);
+  const rounds = await sql`SELECT * FROM feedback_rounds WHERE id = ${roundId}`;
+  if (rounds.length === 0) { await i.reply({ embeds: [errorEmbed('Feedback round not found.')], ephemeral: true }); return; }
+  const round = rounds[0];
+
+  if (round.status !== 'active' && round.status !== 'reminder_sent') {
+    await i.reply({ embeds: [errorEmbed('This feedback round is closed.')], ephemeral: true }); return;
+  }
+
+  const m = i.member as GuildMember;
+  if (!isPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+
+  if (action === 'fb_start') {
+    // Check already submitted
+    const submitted = await sql`SELECT 1 FROM feedback_responses WHERE round_id = ${roundId} AND user_id = ${i.user.id}`;
+    if (submitted.length > 0) { await i.reply({ embeds: [errorEmbed('You have already submitted feedback for this round.')], ephemeral: true }); return; }
+
+    await i.showModal({
+      customId: `fb_text_modal:${roundId}`,
+      title: `Feedback — ${round.title}`,
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'general', label: 'General Thoughts', style: 2, required: true, minLength: 10, maxLength: 1000 }] },
+        { type: 1, components: [{ type: 4, customId: 'department', label: 'Department Feedback', style: 2, required: true, minLength: 10, maxLength: 1000 }] },
+        { type: 1, components: [{ type: 4, customId: 'improvements', label: 'Suggestions for Improvement', style: 2, required: true, minLength: 10, maxLength: 1000 }] },
+      ]
+    });
+  }
+
+  else if (action === 'fb_confirm') {
+    // Submit the pending response
+    const pending = await sql`SELECT * FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`;
+    if (pending.length === 0) { await i.reply({ embeds: [errorEmbed('No pending feedback found.')], ephemeral: true }); return; }
+    const p = pending[0];
+
+    const [response] = await sql`
+      INSERT INTO feedback_responses (round_id, user_id, general_thoughts, department_feedback, improvement_suggestions,
+        rating_department, rating_resources, rating_leadership, rating_communication, rating_custom)
+      VALUES (${roundId}, ${i.user.id}, ${p.general_thoughts}, ${p.department_feedback}, ${p.improvement_suggestions},
+        ${p.rating_department}, ${p.rating_resources}, ${p.rating_leadership}, ${p.rating_communication}, ${p.rating_custom})
+      RETURNING *
+    `;
+    await sql`DELETE FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`;
+
+    // Post to private responses channel
+    try {
+      const ch = await i.client.channels.fetch(config.channels.feedbackResponses) as TextChannel;
+      await ch.send({ embeds: [buildSubmittedEmbed(round, response, i.user.id)] });
+    } catch (e) { console.error('Failed to post feedback response:', e); }
+
+    await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('✅ Feedback Submitted').setDescription('Thank you! Your feedback has been submitted.').setTimestamp()], components: [] });
+  }
+
+  else if (action === 'fb_edit') {
+    // Re-open text modal
+    const pending = await sql`SELECT * FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`;
+    const p = pending[0] ?? {};
+    await i.showModal({
+      customId: `fb_text_modal:${roundId}`,
+      title: `Edit Feedback — ${round.title}`,
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'general', label: 'General Thoughts', style: 2, required: true, minLength: 10, maxLength: 1000, value: p.general_thoughts ?? '' }] },
+        { type: 1, components: [{ type: 4, customId: 'department', label: 'Department Feedback', style: 2, required: true, minLength: 10, maxLength: 1000, value: p.department_feedback ?? '' }] },
+        { type: 1, components: [{ type: 4, customId: 'improvements', label: 'Suggestions for Improvement', style: 2, required: true, minLength: 10, maxLength: 1000, value: p.improvement_suggestions ?? '' }] },
+      ]
+    });
+  }
+}
+
+// ─── SUGGESTION BUTTONS ───────────────────────────────────────────────────────
+async function handleSuggestionButton(i: any, action: string, rest: string[]): Promise<void> {
+  const suggId = parseInt(rest[0]);
+  const m = i.member as GuildMember;
+  if (!isSPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+
+  const sugRows = await sql`SELECT * FROM suggestions WHERE id = ${suggId}`;
+  if (sugRows.length === 0) { await i.reply({ embeds: [errorEmbed('Suggestion not found.')], ephemeral: true }); return; }
+  const sug = sugRows[0];
+
+  if (action === 'sug_consider') {
+    await sql`UPDATE suggestions SET status = 'considered', reviewed_by = ${i.user.id}, updated_at = NOW() WHERE id = ${suggId}`;
+    const updated = (await sql`SELECT * FROM suggestions WHERE id = ${suggId}`)[0];
+
+    // Create a thread for this suggestion
+    try {
+      const ch = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
+      const thread = await ch.threads.create({
+        name: `[#${suggId}] ${sug.title}`.slice(0, 100),
+        autoArchiveDuration: 10080,
+        reason: `Suggestion #${suggId} under consideration`,
+      });
+      await sql`UPDATE suggestions SET thread_id = ${thread.id} WHERE id = ${suggId}`;
+
+      // Post embed with HPA-only action buttons in thread
+      const threadEmbed = buildSuggestionEmbed({ ...updated, status: 'considered' });
+      await thread.send({
+        content: `<@&${config.roles.HPA}> This suggestion is now under consideration.`,
+        embeds: [threadEmbed],
+        components: [buildConsideredRow(suggId)],
+      });
+    } catch (e) { console.error('Failed to create suggestion thread:', e); }
+
+    // Update original embed
+    await i.message.edit({ embeds: [buildSuggestionEmbed(updated)], components: [] });
+    await i.reply({ embeds: [{ color: 0x57f287, title: '✅ Marked as Considered', description: `Suggestion #${suggId} moved to thread.` }], ephemeral: true });
+
+    // DM submitter
+    await dmUser(i.client, sug.submitted_by, {
+      embeds: [new EmbedBuilder().setColor(Colors.Blue).setTitle('💡 Suggestion Update').setDescription(`Your suggestion **${sug.title}** is now under consideration by the team!`).setTimestamp()]
+    });
+  }
+
+  else if (action === 'sug_reject') {
+    await i.showModal({
+      customId: `sug_reject_modal:${suggId}`,
+      title: 'Reject Suggestion',
+      components: [{ type: 1, components: [{ type: 4, customId: 'reason', label: 'Reason for rejection', style: 2, required: true, minLength: 5, maxLength: 500 }] }]
+    });
+  }
+
+  else if (action === 'sug_implement') {
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    await sql`UPDATE suggestions SET status = 'implemented', reviewed_by = ${i.user.id}, updated_at = NOW() WHERE id = ${suggId}`;
+    const updated = (await sql`SELECT * FROM suggestions WHERE id = ${suggId}`)[0];
+    await i.message.edit({ embeds: [buildSuggestionEmbed(updated)], components: [] });
+    await i.reply({ content: '✅ Marked as implemented.', ephemeral: true });
+    await dmUser(i.client, sug.submitted_by, {
+      embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('💡 Suggestion Implemented!').setDescription(`Your suggestion **${sug.title}** has been implemented! 🎉`).setTimestamp()]
+    });
+  }
+
+  else if (action === 'sug_decline') {
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    await i.showModal({
+      customId: `sug_decline_modal:${suggId}`,
+      title: 'Decline Suggestion',
+      components: [{ type: 1, components: [{ type: 4, customId: 'reason', label: 'Reason for declining', style: 2, required: true, minLength: 5, maxLength: 500 }] }]
+    });
+  }
+}
+
 async function handleSelect(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
@@ -932,6 +1126,151 @@ async function handleModal(i: any): Promise<void> {
     const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
 
     try { await i.message.edit({ embeds: [buildEscalationEmbed(updated)], components: [] }); } catch { /* silent */ }
+  }
+
+  // ─── FEEDBACK MODALS ──────────────────────────────────────────────────────
+  else if (action === 'fb_text_modal') {
+    const roundId = parseInt(rest[0]);
+    const rounds = await sql`SELECT * FROM feedback_rounds WHERE id = ${roundId}`;
+    if (rounds.length === 0) { await i.reply({ embeds: [errorEmbed('Round not found.')], ephemeral: true }); return; }
+    const round = rounds[0];
+
+    const general     = i.fields.getTextInputValue('general').trim();
+    const department  = i.fields.getTextInputValue('department').trim();
+    const improvements = i.fields.getTextInputValue('improvements').trim();
+
+    // Save to pending
+    await sql`
+      INSERT INTO feedback_pending (user_id, round_id, general_thoughts, department_feedback, improvement_suggestions)
+      VALUES (${i.user.id}, ${roundId}, ${general}, ${department}, ${improvements})
+      ON CONFLICT (user_id, round_id) DO UPDATE
+      SET general_thoughts = ${general}, department_feedback = ${department}, improvement_suggestions = ${improvements}, updated_at = NOW()
+    `;
+
+    // Show ratings modal
+    await i.showModal({
+      customId: `fb_ratings_modal:${roundId}`,
+      title: 'Rate the Department (1-5)',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'dept', label: 'Department Overall (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'res', label: 'Resources (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'lead', label: 'Leadership (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'comm', label: 'Communication (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'custom', label: `${round.custom_category} (1-5)`, style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+      ]
+    });
+  }
+
+  else if (action === 'fb_ratings_modal') {
+    const roundId = parseInt(rest[0]);
+    const rounds = await sql`SELECT * FROM feedback_rounds WHERE id = ${roundId}`;
+    if (rounds.length === 0) { await i.reply({ embeds: [errorEmbed('Round not found.')], ephemeral: true }); return; }
+    const round = rounds[0];
+
+    const parseRating = (v: string) => Math.min(5, Math.max(1, parseInt(v.trim()) || 1));
+    const ratings = {
+      dept:   parseRating(i.fields.getTextInputValue('dept')),
+      res:    parseRating(i.fields.getTextInputValue('res')),
+      lead:   parseRating(i.fields.getTextInputValue('lead')),
+      comm:   parseRating(i.fields.getTextInputValue('comm')),
+      custom: parseRating(i.fields.getTextInputValue('custom')),
+    };
+
+    // Update pending with ratings
+    await sql`
+      UPDATE feedback_pending SET
+        rating_department = ${ratings.dept}, rating_resources = ${ratings.res},
+        rating_leadership = ${ratings.lead}, rating_communication = ${ratings.comm},
+        rating_custom = ${ratings.custom}, updated_at = NOW()
+      WHERE user_id = ${i.user.id} AND round_id = ${roundId}
+    `;
+
+    const pending = (await sql`SELECT * FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`)[0];
+    if (!pending) { await i.reply({ embeds: [errorEmbed('Session expired. Please start again.')], ephemeral: true }); return; }
+
+    // Show preview with confirm/edit buttons
+    const confirmBtn = new ButtonBuilder().setCustomId(`fb_confirm:${roundId}`).setLabel('✅ Confirm & Submit').setStyle(ButtonStyle.Success);
+    const editBtn    = new ButtonBuilder().setCustomId(`fb_edit:${roundId}`).setLabel('✏️ Edit').setStyle(ButtonStyle.Secondary);
+
+    await i.reply({
+      embeds: [buildResponseEmbed(round, pending)],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(confirmBtn, editBtn)],
+      ephemeral: true,
+    });
+  }
+
+  // ─── SUGGESTION MODALS ────────────────────────────────────────────────────
+  else if (action === 'suggest_modal') {
+    await i.deferReply({ ephemeral: true });
+
+    const title          = i.fields.getTextInputValue('title').trim();
+    const core_idea      = i.fields.getTextInputValue('core_idea').trim();
+    const further_details = i.fields.getTextInputValue('further_details').trim() || null;
+
+    // Duplicate detection
+    const similar = await sql`
+      SELECT id, title FROM suggestions
+      WHERE status NOT IN ('rejected','declined')
+      AND (title ILIKE ${'%' + title + '%'} OR core_idea ILIKE ${'%' + core_idea.slice(0, 30) + '%'})
+      LIMIT 3
+    `;
+
+    if (similar.length > 0) {
+      const list = similar.map((s: any) => `#${s.id} — ${s.title}`).join('\n');
+      await i.editReply({ embeds: [new EmbedBuilder().setColor(Colors.Yellow).setTitle('⚠️ Similar Suggestions Found').setDescription(`Your suggestion may be similar to existing ones:\n\n${list}\n\nIf yours is different, continue by running \`/suggest\` again and confirming.`).setTimestamp()] });
+      return;
+    }
+
+    const [result] = await sql`
+      INSERT INTO suggestions (submitted_by, title, core_idea, further_details)
+      VALUES (${i.user.id}, ${title}, ${core_idea}, ${further_details})
+      RETURNING *
+    `;
+
+    const embed = buildSuggestionEmbed(result);
+    const row   = buildPendingSuggestionRow(result.id);
+
+    try {
+      const ch = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
+      const msg = await ch.send({ embeds: [embed], components: [row] });
+      await sql`UPDATE suggestions SET message_id = ${msg.id} WHERE id = ${result.id}`;
+    } catch (e) { console.error('Failed to post suggestion:', e); }
+
+    await i.editReply({ embeds: [successEmbed('Suggestion Submitted', `Your suggestion **${title}** (ID: #${result.id}) has been submitted for review.`)] });
+  }
+
+  else if (action === 'sug_reject_modal') {
+    await i.deferReply({ ephemeral: true });
+    const suggId = parseInt(rest[0]);
+    const reason = i.fields.getTextInputValue('reason').trim();
+    const [sug]  = await sql`SELECT * FROM suggestions WHERE id = ${suggId}`;
+    if (!sug) { await i.editReply({ embeds: [errorEmbed('Not found.')] }); return; }
+
+    await sql`UPDATE suggestions SET status = 'rejected', rejection_reason = ${reason}, reviewed_by = ${i.user.id}, updated_at = NOW() WHERE id = ${suggId}`;
+    const updated = (await sql`SELECT * FROM suggestions WHERE id = ${suggId}`)[0];
+
+    try { await i.message.edit({ embeds: [buildSuggestionEmbed(updated)], components: [] }); } catch { /* silent */ }
+    await dmUser(i.client, sug.submitted_by, {
+      embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('💡 Suggestion Update').setDescription(`Your suggestion **${sug.title}** has been rejected.\n\n**Reason:** ${reason}`).setTimestamp()]
+    });
+    await i.editReply({ embeds: [successEmbed('Rejected', `Suggestion #${suggId} rejected.`)] });
+  }
+
+  else if (action === 'sug_decline_modal') {
+    await i.deferReply({ ephemeral: true });
+    const suggId = parseInt(rest[0]);
+    const reason = i.fields.getTextInputValue('reason').trim();
+    const [sug]  = await sql`SELECT * FROM suggestions WHERE id = ${suggId}`;
+    if (!sug) { await i.editReply({ embeds: [errorEmbed('Not found.')] }); return; }
+
+    await sql`UPDATE suggestions SET status = 'declined', rejection_reason = ${reason}, reviewed_by = ${i.user.id}, updated_at = NOW() WHERE id = ${suggId}`;
+    const updated = (await sql`SELECT * FROM suggestions WHERE id = ${suggId}`)[0];
+
+    try { await i.message.edit({ embeds: [buildSuggestionEmbed(updated)], components: [] }); } catch { /* silent */ }
+    await dmUser(i.client, sug.submitted_by, {
+      embeds: [new EmbedBuilder().setColor(Colors.Orange).setTitle('💡 Suggestion Update').setDescription(`Your suggestion **${sug.title}** has been declined.\n\n**Reason:** ${reason}`).setTimestamp()]
+    });
+    await i.editReply({ embeds: [successEmbed('Declined', `Suggestion #${suggId} declined.`)] });
   }
 }
 

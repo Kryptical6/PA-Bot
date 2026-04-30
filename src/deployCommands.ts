@@ -47,6 +47,10 @@ import { data as createGameNight }      from './commands/hpa/create_game_night';
 import { data as cancelGameNight }      from './commands/hpa/cancel_game_night';
 import { data as deleteSuggestion }     from './commands/hpa/delete_suggestion';
 import { data as clearStale }           from './commands/hpa/clear_stale';
+import { data as createFeedback }   from './commands/hpa/create_feedback';
+import { data as closeFeedback }     from './commands/hpa/close_feedback';
+import { data as suggest }           from './commands/shared/suggest';
+import { data as searchSuggestions } from './commands/spa/search_suggestions';
 
 const commands = [
   // Shared
@@ -61,6 +65,8 @@ const commands = [
   manageLogTracker, createAssessment, createAssessmentQ, editAssessmentQ,
   deleteAssessmentQ, publishAssessment, restrictAssessment, viewResults,
   viewSessions, createGameNight, cancelGameNight, deleteSuggestion, clearStale,
+  createFeedback, closeFeedback,
+  suggest, searchSuggestions,
 ].map(c => c.toJSON());
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN!);
