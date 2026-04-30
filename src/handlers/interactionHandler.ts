@@ -140,14 +140,23 @@ async function handleButton(i: any): Promise<void> {
     await sql`INSERT INTO logs (user_id, type, reason, post_id, logged_by, date, expires_at) VALUES (${pending.user_id}, ${type}, ${pending.reason}, ${pending.post_id}, ${pending.logged_by}, ${pending.date}, ${exp.toISOString()})`;
     await sql`DELETE FROM pending_logs WHERE id = ${pendingId}`;
 
-    // Update the embed to show result, remove buttons
+    // Edit the original HPA review message (fetch from hpaReview channel by footer)
     const resultEmbed = new EmbedBuilder()
       .setColor(type === 'mistake' ? Colors.Orange : Colors.Red)
       .setTitle(`${type === 'mistake' ? '⚠️ Mistake Logged' : '❌ Strike Logged'}`)
       .setDescription(`**Post ID:** \`${pending.post_id}\`\nLogged for <@${pending.user_id}>\n\n**Reason:** ${pending.reason}`)
       .setFooter({ text: `Logged by ${i.user.tag}` })
       .setTimestamp();
-    try { await i.message.edit({ embeds: [resultEmbed], components: [] }); } catch { /* silent */ }
+
+    // Try to find and edit the original message in hpaReview channel
+    try {
+      const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
+      const messages = await ch.messages.fetch({ limit: 50 });
+      const original = messages.find((msg: any) =>
+        msg.embeds[0]?.footer?.text?.includes(`Pending ID: ${pendingId}`)
+      );
+      if (original) await original.edit({ embeds: [resultEmbed], components: [] });
+    } catch { /* silent */ }
 
     // DM logger
     await safeDM(i.client, pending.logged_by, successEmbed('Log Approved', `Your log against <@${pending.user_id}> was approved as a **${type}**.`), 'log approved');
@@ -717,7 +726,7 @@ async function handleModal(i: any): Promise<void> {
   }
 
   else if (action === 'modal_deny_log') {
-    await i.deferReply({ ephemeral: true });
+    await i.deferReply({ flags: 64 });
     const pendingId = parseInt(rest[0]);
     const reason    = i.fields.getTextInputValue('reason').trim();
     const [pending] = await sql`SELECT * FROM pending_logs WHERE id = ${pendingId}`;
@@ -730,7 +739,7 @@ async function handleModal(i: any): Promise<void> {
   }
 
   else if (action === 'modal_edit_pending') {
-    await i.deferReply({ ephemeral: true });
+    await i.deferReply({ flags: 64 });
     const pendingId = parseInt(rest[0]);
     const reason    = i.fields.getTextInputValue('reason').trim();
     const [pending] = await sql`SELECT * FROM pending_logs WHERE id = ${pendingId}`;
@@ -771,7 +780,7 @@ async function handleModal(i: any): Promise<void> {
   }
 
   else if (action === 'modal_override') {
-    await i.deferReply({ ephemeral: true });
+    await i.deferReply({ flags: 64 });
     const resultId       = parseInt(rest[0]);
     const scoreRaw       = i.fields.getTextInputValue('score').trim();
     const passedRaw      = i.fields.getTextInputValue('passed').trim().toLowerCase();
@@ -819,7 +828,7 @@ async function handleModal(i: any): Promise<void> {
   }
 
   else if (action === 'modal_escalation_dm') {
-    await i.deferReply({ ephemeral: true });
+    await i.deferReply({ flags: 64 });
     const targetId = rest[0];
     const message  = i.fields.getTextInputValue('message').trim();
     try {
@@ -834,7 +843,7 @@ async function handleModal(i: any): Promise<void> {
   }
 
   else if (action === 'gn_edit_modal') {
-    await i.deferReply({ ephemeral: true });
+    await i.deferReply({ flags: 64 });
     const nightId = parseInt(rest[0]);
     const title   = i.fields.getTextInputValue('title').trim();
     const dateStr = i.fields.getTextInputValue('date').trim();
@@ -867,7 +876,7 @@ async function handleModal(i: any): Promise<void> {
 
   else if (action === 'escalate_modal') {
     const actionType  = rest[0];
-    await i.deferReply({ ephemeral: true });
+    await i.deferReply({ flags: 64 });
 
     const postId      = i.fields.getTextInputValue('post_id').trim();
     const information = i.fields.getTextInputValue('information').trim();

@@ -15,8 +15,8 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   const userId = i.user.id;
   const assessments = await sql`
-    SELECT a.* FROM assessments a WHERE a.published = true
-    AND (a.restricted = false OR EXISTS (SELECT 1 FROM assessment_allowed_users u WHERE u.assessment_id = a.id AND u.user_id = ${userId}))
+    SELECT a.* FROM assessments a WHERE (a.published = TRUE OR a.published = 't' OR a.published::text = 'true')
+    AND (a.restricted IS NOT TRUE OR EXISTS (SELECT 1 FROM assessment_allowed_users u WHERE u.assessment_id = a.id AND u.user_id = ${userId}))
     ORDER BY a.created_at DESC
   `;
 
