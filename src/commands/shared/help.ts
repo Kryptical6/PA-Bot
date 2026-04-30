@@ -18,6 +18,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/pa_assessment` - Start an assessment',
     '`/escalate` - Escalate a post to a senior',
     '`/my_escalations` - View your escalation requests',
+    '`/suggest` - Submit a department suggestion',
     '`/suggest_game` - Suggest a game for game night',
     '`/view_suggestions` - View approved game suggestions',
   ].join('\n') });
@@ -37,6 +38,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/edit_embed` - Edit an existing embed',
     '`/edit_game_night` - Edit a scheduled game night',
     '`/view_escalations` - View all open escalations',
+    '`/search_suggestions` - Search department suggestions',
   ].join('\n') });
 
   if (isHPA(m)) embed.addFields({ name: '🔸 HPA Commands', value: [
@@ -59,6 +61,8 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/cancel_game_night` - Cancel a game night',
     '`/delete_suggestion` - Remove a game suggestion',
     '`/clear_stale` - Clear stale pending logs or appeals',
+    '`/create_feedback` - Create a PA feedback round',
+    '`/close_feedback` - Close a feedback round early',
   ].join('\n') });
 
   await i.reply({ embeds: [embed], ephemeral: true });
