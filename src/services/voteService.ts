@@ -1,5 +1,6 @@
 import { Client, TextChannel, EmbedBuilder, Colors } from 'discord.js';
 import { sql } from '../database/client';
+import { config } from '../config';
 
 export async function processExpiredVotes(client: Client): Promise<void> {
   const expired = await sql`SELECT * FROM votes WHERE status = 'active' AND deadline <= NOW()`;
@@ -21,24 +22,38 @@ export async function closeVote(client: Client, voteId: number): Promise<void> {
   }
 
   const sorted = Object.entries(tally).sort((a, b) => b[1].count - a[1].count);
-  const embed = new EmbedBuilder().setColor(Colors.Gold).setTitle(`🗳️ Vote Results: ${vote.title}`).setTimestamp();
+  const embed = new EmbedBuilder()
+    .setColor(Colors.Gold)
+    .setTitle(`🗳️ Vote Results: ${vote.title}`)
+    .setTimestamp();
 
   if (sorted.length === 0) {
     embed.setDescription('No votes were cast.');
   } else {
     for (const [candidateId, data] of sorted) {
-      let voters = '';
-      if (vote.anonymity === 'public' && data.voters.length > 0) voters = `\nVoters: ${data.voters.map((v: string) => `<@${v}>`).join(', ')}`;
-      else if (vote.anonymity === 'flexible' && data.voters.length > 0) voters = `\nPublic voters: ${data.voters.map((v: string) => `<@${v}>`).join(', ')}`;
-      embed.addFields({ name: `<@${candidateId}>`, value: `**${data.count} vote(s)**${voters}` });
+      const voterMentions = data.voters.map((v: string) => `<@${v}>`).join(', ');
+      let value = `**${data.count} vote(s)**`;
+      if (vote.anonymity === 'public' && data.voters.length > 0) {
+        value += `\nVoters: ${voterMentions}`;
+      } else if (vote.anonymity === 'flexible' && data.voters.length > 0) {
+        value += `\nPublic voters: ${voterMentions}`;
+      }
+      embed.addFields({ name: `<@${candidateId}>`, value });
     }
   }
 
+  // Send results to appeals channel, not the vote channel
   try {
-    const channel = await client.channels.fetch(vote.channel_id) as TextChannel;
-    await channel.send({ embeds: [embed] });
-    if (vote.message_id) {
-      try { const msg = await channel.messages.fetch(vote.message_id); await msg.delete(); } catch { /* silent */ }
-    }
+    const ch = await client.channels.fetch(config.channels.appeals) as TextChannel;
+    await ch.send({ embeds: [embed] });
   } catch (e) { console.error(`Failed to post vote results ${voteId}:`, e); }
+
+  // Delete the original vote message
+  try {
+    const voteCh = await client.channels.fetch(vote.channel_id) as TextChannel;
+    if (vote.message_id) {
+      const msg = await voteCh.messages.fetch(vote.message_id);
+      await msg.delete();
+    }
+  } catch { /* silent */ }
 }

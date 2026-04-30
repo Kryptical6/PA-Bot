@@ -11,7 +11,7 @@ export const data = new SlashCommandBuilder().setName('pa_assessment').setDescri
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;
   if (!isPA(m)) return;
-  await i.deferReply({ ephemeral: true });
+  await i.deferReply({ flags: 64 });
 
   const userId = i.user.id;
   const assessments = await sql`
@@ -42,8 +42,8 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
         return;
       }
       const [req] = await sql`INSERT INTO retake_requests (user_id, assessment_id) VALUES (${userId}, ${assessmentId}) RETURNING id`;
-      await sendRetakeRequest(i.client, userId, assessmentId, assessment.title, req.id);
       await sel.update({ embeds: [infoEmbed('Retake Requested', 'Your retake request has been sent to HPA.')], components: [] });
+      await sendRetakeRequest(i.client, userId, assessmentId, assessment.title, req.id);
       return;
     }
 
