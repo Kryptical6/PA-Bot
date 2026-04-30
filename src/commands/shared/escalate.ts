@@ -66,18 +66,17 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   await i.deferReply({ ephemeral: true });
 
-  // Step 1 — pick action
   const select = new StringSelectMenuBuilder()
     .setCustomId('esc_action_select')
     .setPlaceholder('What do you need?')
     .addOptions(
-      new StringSelectMenuOptionBuilder().setLabel('🔍 Review my post').setDescription('Ask a senior to review a post decision').setValue('review_post'),
+      new StringSelectMenuOptionBuilder().setLabel('🔍 Review my post').setDescription('Ask a senior to review my post').setValue('review_post'),
       new StringSelectMenuOptionBuilder().setLabel('🔰 Revoke a Skill Role').setDescription('Request removal of a skill role').setValue('revoke_skill_role'),
       new StringSelectMenuOptionBuilder().setLabel('🔄 Take-over this post').setDescription('Ask a senior to take over handling a post').setValue('takeover_post'),
     );
 
   const msg = await i.editReply({
-    content: 'What action do you need?',
+    content: 'Select what action you need:',
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
   });
 
@@ -94,54 +93,15 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   const action = sel.values[0];
 
-  // Step 2 — show modal for post ID and info
   await sel.showModal({
     customId: `escalate_modal:${action}`,
-    title: ACTION_LABELS[action].replace(/^[^\w]+/, ''),
+    title: ACTION_LABELS[action].replace(/^[🔍🔰🔄]\s*/, ''),
     components: [
       { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Post ID', style: 1, required: true, maxLength: 200 }] },
       { type: 1, components: [{ type: 4, customId: 'information', label: 'Information / Context', style: 2, required: true, minLength: 10, maxLength: 1000 }] },
     ]
   });
 
-  const modal = await sel.awaitModalSubmit({
-    time: 300_000,
-    filter: m => m.customId === `escalate_modal:${action}` && m.user.id === i.user.id,
-  }).catch(() => null);
-
-  if (!modal) return;
-  await modal.deferUpdate();
-
-  const postId      = modal.fields.getTextInputValue('post_id').trim();
-  const information = modal.fields.getTextInputValue('information').trim();
-
-  // Check for duplicate
-  const existing = await sql`SELECT 1 FROM post_escalations WHERE post_id = ${postId} AND status IN ('pending','claimed')`;
-  if (existing.length > 0) {
-    await i.editReply({ embeds: [errorEmbed(`Post ID \`${postId}\` already has an active escalation.`)], components: [] });
-    return;
-  }
-
-  const [result] = await sql`
-    INSERT INTO post_escalations (post_id, submitted_by, information, action)
-    VALUES (${postId}, ${i.user.id}, ${information}, ${action})
-    RETURNING id
-  `;
-
-  const escRows = await sql`SELECT * FROM post_escalations WHERE id = ${result.id}`;
-  const esc = escRows[0];
-
-  const embed = buildEscalationEmbed(esc);
-  const row   = buildPendingRow(result.id);
-
-  const submitterIsSPA = isSPA(member);
-  const pingRole = submitterIsSPA ? `<@&${config.roles.HPA}>` : `<@&${config.roles.SPA}>`;
-
-  try {
-    const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
-    const sentMsg = await ch.send({ content: `${pingRole} New escalation request`, embeds: [embed], components: [row] });
-    await sql`UPDATE post_escalations SET message_id = ${sentMsg.id} WHERE id = ${result.id}`;
-  } catch (e) { console.error('Failed to post escalation:', e); }
-
-  await i.editReply({ embeds: [{ color: 0x57f287, title: '✅ Escalation Submitted', description: `Your escalation for post \`${postId}\` has been submitted.` }], components: [] });
+  // Close the select menu - modal submission handled globally
+  await i.editReply({ content: 'Fill in the modal to complete your escalation.', components: [] });
 }

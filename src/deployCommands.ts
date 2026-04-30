@@ -46,6 +46,8 @@ import { data as viewSessions }         from './commands/hpa/view_active_session
 import { data as approveRetake }        from './commands/hpa/approve_retake';
 import { data as createGameNight }      from './commands/hpa/create_game_night';
 import { data as cancelGameNight }      from './commands/hpa/cancel_game_night';
+import { data as deleteSuggestion }     from './commands/hpa/delete_suggestion';
+import { data as clearStale }           from './commands/hpa/clear_stale';
 
 const commands = [
   // Shared
@@ -59,7 +61,7 @@ const commands = [
   forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser, bulkActions,
   manageLogTracker, createAssessment, createAssessmentQ, editAssessmentQ,
   deleteAssessmentQ, publishAssessment, restrictAssessment, viewResults,
-  viewSessions, approveRetake, createGameNight, cancelGameNight,
+  viewSessions, approveRetake, createGameNight, cancelGameNight, deleteSuggestion, clearStale,
 ].map(c => c.toJSON());
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN!);
