@@ -805,51 +805,11 @@ async function handleModal(i: any): Promise<void> {
   }
 
   else if (action === 'escalate_modal') {
-    await i.deferReply({ ephemeral: true });
-    const postId      = i.fields.getTextInputValue('post_id').trim();
-    const information = i.fields.getTextInputValue('information').trim();
-    const actionRaw   = i.fields.getTextInputValue('action').trim().toLowerCase().replace(/\s+/g, '_');
-
-    const validActions = ['review_post', 'revoke_skill_role', 'takeover_post'];
-    if (!validActions.includes(actionRaw)) {
-      await i.editReply({ embeds: [errorEmbed(`Invalid action. Must be one of: ${validActions.join(', ')}`)] });
-      return;
-    }
-
-    // Check for existing active escalation for this post ID
-    const existing = await sql`SELECT 1 FROM post_escalations WHERE post_id = ${postId} AND status IN ('pending','claimed')`;
-    if (existing.length > 0) {
-      await i.editReply({ embeds: [errorEmbed(`Post ID \`${postId}\` already has an active escalation.`)] });
-      return;
-    }
-
-    const m = i.member as GuildMember;
-    const submitterIsSPA = isSPA(m);
-
-    const [result] = await sql`
-      INSERT INTO post_escalations (post_id, submitted_by, information, action)
-      VALUES (${postId}, ${i.user.id}, ${information}, ${actionRaw})
-      RETURNING id
-    `;
-
-    const escRows = await sql`SELECT * FROM post_escalations WHERE id = ${result.id}`;
-    const esc = escRows[0];
-
-    const embed = buildEscalationEmbed(esc);
-    const row   = buildPendingRow(result.id);
-
-    // Ping SPA if PA submitted, ping HPA if SPA submitted
-    const pingRole = submitterIsSPA
-      ? `<@&${config.roles.HPA}>`
-      : `<@&${config.roles.SPA}>`;
-
-    try {
-      const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
-      const msg = await ch.send({ content: `${pingRole} New escalation request`, embeds: [embed], components: [row] });
-      await sql`UPDATE post_escalations SET message_id = ${msg.id} WHERE id = ${result.id}`;
-    } catch (e) { console.error('Failed to post escalation:', e); }
-
-    await i.editReply({ embeds: [successEmbed('Escalation Submitted', `Your escalation for post \`${postId}\` has been submitted.`)] });
+    // action is now in rest[0] since customId is escalate_modal:action
+    // This path is no longer used - modal is handled inline in the command via awaitModalSubmit
+    // But kept as fallback
+    await i.deferReply({ ephemeral: true }).catch(() => {});
+    await i.editReply({ content: 'Please use /escalate to submit an escalation.' }).catch(() => {});
   }
 
   else if (action === 'esc_resolve_modal') {
