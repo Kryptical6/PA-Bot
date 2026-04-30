@@ -602,6 +602,24 @@ async function handleGameNightButton(i: any): Promise<void> {
 async function handleSelect(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
+  if (action === 'esc_action_select') {
+    const selectedAction = i.values[0];
+    const actionTitles: Record<string, string> = {
+      review_post:       'Review My Post',
+      revoke_skill_role: 'Revoke a Skill Role',
+      takeover_post:     'Take-over This Post',
+    };
+    await i.showModal({
+      customId: `escalate_modal:${selectedAction}`,
+      title: actionTitles[selectedAction] ?? 'Escalate Post',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Post ID', style: 1, required: true, maxLength: 200 }] },
+        { type: 1, components: [{ type: 4, customId: 'information', label: 'Information / Context', style: 2, required: true, minLength: 10, maxLength: 1000 }] },
+      ]
+    });
+    return;
+  }
+
   if (action === 'vote_select') {
     const voteId      = parseInt(rest[0]);
     const candidateId = i.values[0];

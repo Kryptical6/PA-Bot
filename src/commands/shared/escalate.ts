@@ -64,10 +64,9 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     return;
   }
 
-  // Don't defer - we need to show a modal from the select interaction
   const select = new StringSelectMenuBuilder()
     .setCustomId('esc_action_select')
-    .setPlaceholder('What do you need?')
+    .setPlaceholder('What action do you need?')
     .addOptions(
       new StringSelectMenuOptionBuilder().setLabel('🔍 Review my post').setDescription('Ask a senior to review my post').setValue('review_post'),
       new StringSelectMenuOptionBuilder().setLabel('🔰 Revoke a Skill Role').setDescription('Request removal of a skill role').setValue('revoke_skill_role'),
@@ -79,31 +78,4 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
     ephemeral: true,
   });
-
-  const msg = await i.fetchReply();
-
-  const sel = await msg.awaitMessageComponent({
-    componentType: ComponentType.StringSelect,
-    filter: s => s.user.id === i.user.id && s.customId === 'esc_action_select',
-    time: 30_000,
-  }).catch(() => null);
-
-  if (!sel) {
-    await i.editReply({ content: 'Timed out.', components: [] });
-    return;
-  }
-
-  const action = sel.values[0];
-
-  // Show modal from the select interaction (not deferred)
-  await sel.showModal({
-    customId: `escalate_modal:${action}`,
-    title: ACTION_LABELS[action].replace(/^[🔍🔰🔄]\s*/, ''),
-    components: [
-      { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Post ID', style: 1, required: true, maxLength: 200 }] },
-      { type: 1, components: [{ type: 4, customId: 'information', label: 'Information / Context', style: 2, required: true, minLength: 10, maxLength: 1000 }] },
-    ]
-  });
-
-  await i.editReply({ content: 'Complete the modal to finish your escalation.', components: [] });
 }
