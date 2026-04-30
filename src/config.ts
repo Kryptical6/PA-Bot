@@ -12,6 +12,7 @@ export const config = {
     assessmentResults:  '1357749002619322439',
     gameSuggestions:    '1388953787322077314', // Approved suggestions posted here
     gameNightSchedule:  '1004416752001753149', // Live schedule embed
+    escalations:        '1499180338017206302', // Post escalation requests
   },
   escalation: {
     defaultRate: 3,

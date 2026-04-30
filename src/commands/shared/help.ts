@@ -16,6 +16,10 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/tag` - View a knowledge base tag',
     '`/tag_search` - Search tags by keyword',
     '`/pa_assessment` - Start an assessment',
+    '`/escalate` - Escalate a post to a senior',
+    '`/my_escalations` - View your escalation requests',
+    '`/suggest_game` - Suggest a game for game night',
+    '`/view_suggestions` - View approved game suggestions',
   ].join('\n') });
 
   if (isSPA(m)) embed.addFields({ name: '🔹 SPA Commands', value: [
@@ -29,6 +33,10 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/create_tag` - Create a knowledge base tag',
     '`/edit_tag` - Edit a tag',
     '`/delete_tag` - Delete a tag',
+    '`/create_embed` - Post a custom embed',
+    '`/edit_embed` - Edit an existing embed',
+    '`/edit_game_night` - Edit a scheduled game night',
+    '`/view_escalations` - View all open escalations',
   ].join('\n') });
 
   if (isHPA(m)) embed.addFields({ name: '🔸 HPA Commands', value: [
@@ -48,6 +56,8 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/view_assessment_results` - View user results',
     '`/view_active_sessions` - See in-progress sessions',
     '`/approve_retake` - Action a retake request',
+    '`/create_game_night` - Schedule a game night',
+    '`/cancel_game_night` - Cancel a game night',
   ].join('\n') });
 
   await i.reply({ embeds: [embed], ephemeral: true });

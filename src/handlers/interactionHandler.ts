@@ -29,6 +29,10 @@ import * as deleteTag from '../commands/spa/delete_tag';
 import * as createEmbed from '../commands/spa/create_embed';
 import * as editEmbed from '../commands/spa/edit_embed';
 import * as editGameNight from '../commands/spa/edit_game_night';
+import * as escalate from '../commands/shared/escalate';
+import * as myEscalations from '../commands/shared/my_escalations';
+import * as viewEscalations from '../commands/spa/view_escalations';
+import { buildEscalationEmbed, buildPendingRow, buildClaimedRow } from '../commands/shared/escalate';
 import * as suggestGame from '../commands/shared/suggest_game';
 import * as viewSuggestions from '../commands/shared/view_suggestions';
 import * as createGameNight from '../commands/hpa/create_game_night';
@@ -58,6 +62,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   list_assessments: listAssessments, create_tag: createTag, edit_tag: editTag, delete_tag: deleteTag,
   create_embed: createEmbed, edit_embed: editEmbed,
   suggest_game: suggestGame, view_suggestions: viewSuggestions,
+  escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,
   create_game_night: createGameNight, cancel_game_night: cancelGameNight,
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
@@ -102,6 +107,10 @@ async function handleButton(i: any): Promise<void> {
   // Game night buttons
   const gameNightActions = ['gs_approve', 'gs_deny', 'gs_upvote', 'gn_rsvp', 'gn_list'];
   if (gameNightActions.includes(action)) { await handleGameNightButton(i); return; }
+
+  // Escalation buttons
+  const escalationActions = ['esc_claim', 'esc_withdraw', 'esc_handle', 'esc_reject', 'esc_escalate_hpa'];
+  if (escalationActions.includes(action)) { await handleEscalationButton(i, action, rest); return; }
 
   // Pending log review
   if (action === 'log_approve') {
@@ -397,6 +406,67 @@ async function handleButton(i: any): Promise<void> {
 }
 
 // ─── GAME NIGHT BUTTONS ───────────────────────────────────────────────────────
+// ─── ESCALATION BUTTONS ───────────────────────────────────────────────────────
+async function handleEscalationButton(i: any, action: string, rest: string[]): Promise<void> {
+  const escalationId = parseInt(rest[0]);
+  const escRows = await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`;
+  if (escRows.length === 0) { await i.reply({ embeds: [errorEmbed('Escalation not found.')], ephemeral: true }); return; }
+  const e = escRows[0];
+
+  const m = i.member as GuildMember;
+  const canManage = isSPA(m);
+  const isClaimer = e.claimed_by === i.user.id;
+  const isSubmitter = e.submitted_by === i.user.id;
+
+  if (action === 'esc_claim') {
+    if (!canManage) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    if (e.status !== 'pending') { await i.reply({ embeds: [errorEmbed('This escalation has already been claimed.')], ephemeral: true }); return; }
+
+    await sql`UPDATE post_escalations SET status = 'claimed', claimed_by = ${i.user.id}, updated_at = NOW() WHERE id = ${escalationId}`;
+    const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
+    await i.message.edit({ embeds: [buildEscalationEmbed(updated)], components: [buildClaimedRow(escalationId)] });
+    await i.reply({ content: `✅ You have claimed escalation #${escalationId}.`, ephemeral: true });
+  }
+
+  else if (action === 'esc_withdraw') {
+    if (!isSubmitter) { await i.reply({ content: 'Only the submitter can withdraw this escalation.', ephemeral: true }); return; }
+    if (e.status !== 'pending') { await i.reply({ embeds: [errorEmbed('You can only withdraw pending escalations.')], ephemeral: true }); return; }
+
+    await sql`DELETE FROM post_escalations WHERE id = ${escalationId}`;
+    await i.message.edit({ embeds: [buildEscalationEmbed({ ...e, status: 'handled', resolution_notes: 'Withdrawn by submitter' })], components: [] });
+    await i.reply({ content: '↩️ Escalation withdrawn.', ephemeral: true });
+  }
+
+  else if (action === 'esc_handle' || action === 'esc_reject') {
+    if (!canManage) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    if (e.status !== 'claimed' && e.status !== 'escalated_hpa') { await i.reply({ embeds: [errorEmbed('This escalation is not claimed.')], ephemeral: true }); return; }
+    if (!isClaimer && !isHPA(m)) { await i.reply({ content: 'Only the claimer or HPA can resolve this.', ephemeral: true }); return; }
+
+    const newStatus = action === 'esc_handle' ? 'handled' : 'rejected';
+    await i.showModal({
+      customId: `esc_resolve_modal:${escalationId}:${newStatus}`,
+      title: action === 'esc_handle' ? 'Resolve - Handled' : 'Resolve - Rejected',
+      components: [{ type: 1, components: [{ type: 4, customId: 'notes', label: 'Resolution notes (required)', style: 2, required: true, minLength: 5, maxLength: 1000 }] }]
+    });
+  }
+
+  else if (action === 'esc_escalate_hpa') {
+    if (!canManage) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    if (!isClaimer && !isHPA(m)) { await i.reply({ content: 'Only the claimer or HPA can escalate.', ephemeral: true }); return; }
+
+    await sql`UPDATE post_escalations SET status = 'escalated_hpa', updated_at = NOW() WHERE id = ${escalationId}`;
+    const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
+
+    const hpaRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`esc_handle:${escalationId}`).setLabel('✅ Handled').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`esc_reject:${escalationId}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger),
+    );
+
+    await i.message.edit({ content: `<@&${config.roles.HPA}> This escalation has been escalated to HPA.`, embeds: [buildEscalationEmbed(updated)], components: [hpaRow] });
+    await i.reply({ content: '⬆️ Escalated to HPA.', ephemeral: true });
+  }
+}
+
 async function handleGameNightButton(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
@@ -732,6 +802,67 @@ async function handleModal(i: any): Promise<void> {
 
     await updateScheduleEmbed(i.client);
     await i.editReply({ embeds: [successEmbed('Updated', `Game night #${nightId} updated.`)] });
+  }
+
+  else if (action === 'escalate_modal') {
+    await i.deferReply({ ephemeral: true });
+    const postId      = i.fields.getTextInputValue('post_id').trim();
+    const information = i.fields.getTextInputValue('information').trim();
+    const actionRaw   = i.fields.getTextInputValue('action').trim().toLowerCase().replace(/\s+/g, '_');
+
+    const validActions = ['review_post', 'revoke_skill_role', 'takeover_post'];
+    if (!validActions.includes(actionRaw)) {
+      await i.editReply({ embeds: [errorEmbed(`Invalid action. Must be one of: ${validActions.join(', ')}`)] });
+      return;
+    }
+
+    // Check for existing active escalation for this post ID
+    const existing = await sql`SELECT 1 FROM post_escalations WHERE post_id = ${postId} AND status IN ('pending','claimed')`;
+    if (existing.length > 0) {
+      await i.editReply({ embeds: [errorEmbed(`Post ID \`${postId}\` already has an active escalation.`)] });
+      return;
+    }
+
+    const m = i.member as GuildMember;
+    const submitterIsSPA = isSPA(m);
+
+    const [result] = await sql`
+      INSERT INTO post_escalations (post_id, submitted_by, information, action)
+      VALUES (${postId}, ${i.user.id}, ${information}, ${actionRaw})
+      RETURNING id
+    `;
+
+    const escRows = await sql`SELECT * FROM post_escalations WHERE id = ${result.id}`;
+    const esc = escRows[0];
+
+    const embed = buildEscalationEmbed(esc);
+    const row   = buildPendingRow(result.id);
+
+    // Ping SPA if PA submitted, ping HPA if SPA submitted
+    const pingRole = submitterIsSPA
+      ? `<@&${config.roles.HPA}>`
+      : `<@&${config.roles.SPA}>`;
+
+    try {
+      const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
+      const msg = await ch.send({ content: `${pingRole} New escalation request`, embeds: [embed], components: [row] });
+      await sql`UPDATE post_escalations SET message_id = ${msg.id} WHERE id = ${result.id}`;
+    } catch (e) { console.error('Failed to post escalation:', e); }
+
+    await i.editReply({ embeds: [successEmbed('Escalation Submitted', `Your escalation for post \`${postId}\` has been submitted.`)] });
+  }
+
+  else if (action === 'esc_resolve_modal') {
+    const escalationId = parseInt(rest[0]);
+    const newStatus    = rest[1];
+    const notes        = i.fields.getTextInputValue('notes').trim();
+
+    await i.deferUpdate().catch(() => {});
+
+    await sql`UPDATE post_escalations SET status = ${newStatus}, resolution_notes = ${notes}, updated_at = NOW() WHERE id = ${escalationId}`;
+    const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
+
+    try { await i.message.edit({ embeds: [buildEscalationEmbed(updated)], components: [] }); } catch { /* silent */ }
   }
 }
 
