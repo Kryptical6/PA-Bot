@@ -19,8 +19,8 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/escalate` - Escalate a post to a senior',
     '`/my_escalations` - View your escalation requests',
     '`/suggest` - Submit a department suggestion',
-    '`/suggest_game` - Suggest a game for game night',
-    '`/view_suggestions` - View approved game suggestions',
+    '`/game_suggest` - Suggest a game for game night',
+    '`/game_suggestions` - View approved game suggestions',
   ].join('\n') });
 
   if (isSPA(m)) embed.addFields({ name: '🔹 SPA Commands', value: [

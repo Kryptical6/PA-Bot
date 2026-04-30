@@ -68,13 +68,13 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   lookup_post: lookupPost, warn_user: warnUser, create_vote: createVote,
   list_assessments: listAssessments, create_tag: createTag, edit_tag: editTag, delete_tag: deleteTag,
   create_embed: createEmbed, edit_embed: editEmbed,
-  suggest_game: suggestGame, view_suggestions: viewSuggestions,
+  game_suggest: suggestGame, game_suggestions: viewSuggestions,
   escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,
   create_game_night: createGameNight, cancel_game_night: cancelGameNight,
   delete_suggestion: deleteSuggestion, clear_stale: clearStale,
   create_feedback: createFeedback, close_feedback: closeFeedback,
-  suggest, search_suggestions: searchSuggestions,
+  dept_suggest: suggest, dept_suggestions: searchSuggestions,
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
   manage_log_tracker: manageLogTracker, create_assessment: createAssessment,
@@ -1260,17 +1260,32 @@ async function handleModal(i: any): Promise<void> {
     await i.deferReply({ ephemeral: true });
     const suggId = parseInt(rest[0]);
     const reason = i.fields.getTextInputValue('reason').trim();
-    const [sug]  = await sql`SELECT * FROM suggestions WHERE id = ${suggId}`;
-    if (!sug) { await i.editReply({ embeds: [errorEmbed('Not found.')] }); return; }
+    const suggRows = await sql`SELECT * FROM suggestions WHERE id = ${suggId}`;
+    if (suggRows.length === 0) { await i.editReply({ embeds: [errorEmbed('Not found.')] }); return; }
+    const sug = suggRows[0];
 
     await sql`UPDATE suggestions SET status = 'declined', rejection_reason = ${reason}, reviewed_by = ${i.user.id}, updated_at = NOW() WHERE id = ${suggId}`;
     const updated = (await sql`SELECT * FROM suggestions WHERE id = ${suggId}`)[0];
 
+    // Update thread message (remove buttons)
     try { await i.message.edit({ embeds: [buildSuggestionEmbed(updated)], components: [] }); } catch { /* silent */ }
-    await dmUser(i.client, sug.submitted_by, {
+
+    // Update original channel message
+    if (sug.message_id) {
+      try {
+        const ch = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
+        const msg = await ch.messages.fetch(sug.message_id);
+        await msg.edit({ embeds: [buildSuggestionEmbed(updated)], components: [] });
+      } catch { /* silent */ }
+    }
+
+    // DM submitter
+    const dmSent = await dmUser(i.client, sug.submitted_by, {
       embeds: [new EmbedBuilder().setColor(Colors.Orange).setTitle('💡 Suggestion Update').setDescription(`Your suggestion **${sug.title}** has been declined.\n\n**Reason:** ${reason}`).setTimestamp()]
     });
-    await i.editReply({ embeds: [successEmbed('Declined', `Suggestion #${suggId} declined.`)] });
+    console.log(`Decline DM sent to ${sug.submitted_by}: ${dmSent}`);
+
+    await i.editReply({ embeds: [successEmbed('Declined', `Suggestion #${suggId} declined and submitter notified.`)] });
   }
 }
 
