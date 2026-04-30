@@ -64,8 +64,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     return;
   }
 
-  await i.deferReply({ ephemeral: true });
-
+  // Don't defer - we need to show a modal from the select interaction
   const select = new StringSelectMenuBuilder()
     .setCustomId('esc_action_select')
     .setPlaceholder('What do you need?')
@@ -75,10 +74,13 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       new StringSelectMenuOptionBuilder().setLabel('🔄 Take-over this post').setDescription('Ask a senior to take over handling a post').setValue('takeover_post'),
     );
 
-  const msg = await i.editReply({
+  await i.reply({
     content: 'Select what action you need:',
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+    ephemeral: true,
   });
+
+  const msg = await i.fetchReply();
 
   const sel = await msg.awaitMessageComponent({
     componentType: ComponentType.StringSelect,
@@ -93,6 +95,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   const action = sel.values[0];
 
+  // Show modal from the select interaction (not deferred)
   await sel.showModal({
     customId: `escalate_modal:${action}`,
     title: ACTION_LABELS[action].replace(/^[🔍🔰🔄]\s*/, ''),
@@ -102,6 +105,5 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     ]
   });
 
-  // Close the select menu - modal submission handled globally
-  await i.editReply({ content: 'Fill in the modal to complete your escalation.', components: [] });
+  await i.editReply({ content: 'Complete the modal to finish your escalation.', components: [] });
 }
