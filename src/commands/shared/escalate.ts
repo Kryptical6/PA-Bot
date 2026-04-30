@@ -5,9 +5,10 @@ import { sql } from '../../database/client';
 import { config } from '../../config';
 
 export const ACTION_LABELS: Record<string, string> = {
-  review_post:       '🔍 Review my post',
-  revoke_skill_role: '🔰 Revoke a Skill Role',
-  takeover_post:     '🔄 Take-over this post',
+  review_post:         '🔍 Review my post',
+  revoke_skill_role:   '🔰 Revoke a Skill Role',
+  takeover_post:       '🔄 Take-over this post',
+  punishment_request:  '⚖️ Punishment Request (Code/Scripts Only)',
 };
 
 export function buildEscalationEmbed(e: any): EmbedBuilder {
@@ -71,6 +72,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       new StringSelectMenuOptionBuilder().setLabel('🔍 Review my post').setDescription('Ask a senior to review my post').setValue('review_post'),
       new StringSelectMenuOptionBuilder().setLabel('🔰 Revoke a Skill Role').setDescription('Request removal of a skill role').setValue('revoke_skill_role'),
       new StringSelectMenuOptionBuilder().setLabel('🔄 Take-over this post').setDescription('Ask a senior to take over handling a post').setValue('takeover_post'),
+      new StringSelectMenuOptionBuilder().setLabel('⚖️ Punishment Request').setDescription('Code/Scripts Only — pings HPA directly').setValue('punishment_request'),
     );
 
   await i.reply({
