@@ -18,7 +18,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/pa_assessment` - Start an assessment',
     '`/escalate` - Escalate a post to a senior',
     '`/my_escalations` - View your escalation requests',
-    '`/suggest` - Submit a department suggestion',
+    '`/spa_quota` - View your SPA log quota and stats',
     '`/game_suggest` - Suggest a game for game night',
     '`/game_suggestions` - View approved game suggestions',
   ].join('\n') });
@@ -63,6 +63,9 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/clear_stale` - Clear stale pending logs or appeals',
     '`/create_feedback` - Create a PA feedback round',
     '`/close_feedback` - Close a feedback round early',
+    '`/view_spa_audit` - View full SPA audit report',
+    '`/configure_audit` - Configure SPA audit settings',
+    '`/clear_spa_flag` - Clear a stat flag on a senior',
   ].join('\n') });
 
   await i.reply({ embeds: [embed], ephemeral: true });

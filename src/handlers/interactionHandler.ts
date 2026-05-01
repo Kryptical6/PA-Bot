@@ -36,12 +36,21 @@ import { buildEscalationEmbed, buildPendingRow, buildClaimedRow } from '../comma
 import * as suggestGame from '../commands/shared/suggest_game';
 import * as viewSuggestions from '../commands/shared/view_suggestions';
 import * as createGameNight from '../commands/hpa/create_game_night';
+import * as setupWeeklyReport from '../commands/hpa/setup_weekly_report';
+import * as triggerWeeklyReport from '../commands/hpa/trigger_weekly_report';
+import * as viewReportStatus from '../commands/hpa/view_report_status';
+import { getActiveCycle, buildTagSelect, finalizeReport, generateSummary, scoreReport, getConfig as getReportConfig, TAGS } from '../services/weeklyReportService';
 import * as createFeedback from '../commands/hpa/create_feedback';
 import * as closeFeedback from '../commands/hpa/close_feedback';
+import * as spaQuota from '../commands/spa/spa_quota';
+import * as viewSpaAudit from '../commands/hpa/view_spa_audit';
+import * as configureAudit from '../commands/hpa/configure_audit';
+import * as clearSpaFlag from '../commands/hpa/clear_spa_flag';
 import * as suggest from '../commands/shared/suggest';
 import * as searchSuggestions from '../commands/spa/search_suggestions';
 import { buildFeedbackEmbed, buildFeedbackRow, buildResponseEmbed, buildSubmittedEmbed } from '../services/feedbackService';
 import { buildSuggestionEmbed, buildPendingSuggestionRow, buildConsideredRow } from '../commands/shared/suggest';
+import { getOrCreateDailyLog, getConfig, BEHAVIOUR_FLAGS } from '../services/spaAuditService';
 import * as cancelGameNight from '../commands/hpa/cancel_game_night';
 import * as deleteSuggestion from '../commands/hpa/delete_suggestion';
 import * as clearStale from '../commands/hpa/clear_stale';
@@ -74,6 +83,10 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   create_game_night: createGameNight, cancel_game_night: cancelGameNight,
   delete_suggestion: deleteSuggestion, clear_stale: clearStale,
   create_feedback: createFeedback, close_feedback: closeFeedback,
+  setup_weekly_report: setupWeeklyReport, trigger_weekly_report: triggerWeeklyReport,
+  view_report_status: viewReportStatus,
+  spa_quota: spaQuota, view_spa_audit: viewSpaAudit,
+  configure_audit: configureAudit, clear_spa_flag: clearSpaFlag,
   dept_suggest: suggest, dept_suggestions: searchSuggestions,
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
@@ -128,6 +141,14 @@ async function handleButton(i: any): Promise<void> {
   // Suggestion buttons
   const suggestionActions = ['sug_consider', 'sug_reject', 'sug_implement', 'sug_decline'];
   if (suggestionActions.includes(action)) { await handleSuggestionButton(i, action, rest); return; }
+
+  // Audit buttons
+  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior'];
+  if (auditActions.includes(action)) { await handleAuditButton(i, action, rest); return; }
+
+  // Weekly report buttons
+  const wrActions = ['wr_submit', 'wr_extend', 'wr_confirm', 'wr_edit', 'wr_modal2_trigger'];
+  if (wrActions.includes(action)) { await handleWeeklyReportButton(i, action, rest); return; }
 
   // Pending log review
   if (action === 'log_approve') {
@@ -222,6 +243,11 @@ async function handleButton(i: any): Promise<void> {
       await checkEscalation(i.client, pending.user_id);
       await sendMilestoneDM(i.client, pending.user_id);
     }
+    // Track in SPA audit daily log
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await sql`INSERT INTO spa_daily_logs (user_id, log_date, submitted, approved) VALUES (${pending.logged_by}, ${today}, 1, 1) ON CONFLICT (user_id, log_date) DO UPDATE SET submitted = spa_daily_logs.submitted + 1, approved = spa_daily_logs.approved + 1`;
+    } catch { /* silent */ }
     await updateLogTracker(i.client);
     await i.update({ content: `✅ Logged as **${type}**.`, components: [] });
   }
@@ -496,6 +522,75 @@ async function handleButton(i: any): Promise<void> {
 }
 
 // ─── GAME NIGHT BUTTONS ───────────────────────────────────────────────────────
+// ─── WEEKLY REPORT BUTTONS ────────────────────────────────────────────────────
+async function handleWeeklyReportButton(i: any, action: string, rest: string[]): Promise<void> {
+  const cycleId = parseInt(rest[0]);
+
+  if (action === 'wr_submit') {
+    const cycle = (await sql`SELECT * FROM weekly_report_cycles WHERE id = ${cycleId}`)[0];
+    if (!cycle || cycle.status !== 'active') { await i.reply({ embeds: [errorEmbed('This report cycle is no longer active.')], ephemeral: true }); return; }
+    const existing = await sql`SELECT 1 FROM weekly_reports WHERE cycle_id = ${cycleId} AND user_id = ${i.user.id} AND submitted_at IS NOT NULL`;
+    if (existing.length > 0) { await i.reply({ embeds: [errorEmbed('You have already submitted your report for this cycle.')], ephemeral: true }); return; }
+    await i.showModal({
+      customId: `wr_modal1:${cycleId}`,
+      title: 'Weekly Report — Part 1 of 2',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'issues', label: '📉 Marketplace/System Issues', style: 2, required: true, minLength: 50, maxLength: 1000, placeholder: 'What issues did you notice? Include at least 1 concrete example.' }] },
+        { type: 1, components: [{ type: 4, customId: 'mistakes', label: '🔁 Repeated PA Mistakes', style: 2, required: true, minLength: 50, maxLength: 1000, placeholder: 'What mistakes are PAs consistently making? Focus on patterns.' }] },
+        { type: 1, components: [{ type: 4, customId: 'weaknesses', label: '⚖️ System Weaknesses', style: 2, required: true, minLength: 50, maxLength: 1000, placeholder: 'What part of the system is failing or unclear?' }] },
+      ]
+    });
+  }
+
+  else if (action === 'wr_extend') {
+    const cycle = (await sql`SELECT * FROM weekly_report_cycles WHERE id = ${cycleId}`)[0];
+    if (!cycle || cycle.status !== 'active') { await i.reply({ embeds: [errorEmbed('No active cycle.')], ephemeral: true }); return; }
+    const cfg = await getReportConfig();
+    const extCount = await sql`SELECT COUNT(*) as c FROM weekly_report_extensions WHERE cycle_id = ${cycleId} AND user_id = ${i.user.id}`;
+    const count = parseInt(extCount[0].c);
+    if (count >= cfg.extension_limit) { await i.reply({ embeds: [errorEmbed(`You have used all ${cfg.extension_limit} extension(s) for this cycle.`)], ephemeral: true }); return; }
+    const expiresAt = new Date(Date.now() + 24 * 3600000);
+    await sql`INSERT INTO weekly_report_extensions (cycle_id, user_id, expires_at) VALUES (${cycleId}, ${i.user.id}, ${expiresAt.toISOString()}) ON CONFLICT (cycle_id, user_id) DO UPDATE SET expires_at = ${expiresAt.toISOString()}, granted_at = NOW()`;
+    await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Yellow).setTitle('⏳ Extension Granted').setDescription(`Extension ${count + 1}/${cfg.extension_limit} used. New deadline: <t:${Math.floor(expiresAt.getTime() / 1000)}:F>`).setTimestamp()], components: [] });
+  }
+
+  else if (action === 'wr_confirm') {
+    const cycle   = (await sql`SELECT * FROM weekly_report_cycles WHERE id = ${cycleId}`)[0];
+    const pending = (await sql`SELECT * FROM weekly_report_pending WHERE user_id = ${i.user.id} AND cycle_id = ${cycleId}`)[0];
+    if (!pending) { await i.reply({ embeds: [errorEmbed('Session expired. Please start again.')], ephemeral: true }); return; }
+    const isLate = cycle && new Date(cycle.deadline_at) < new Date();
+    await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('✅ Submitting...').setTimestamp()], components: [] });
+    await finalizeReport(i.client, i.user.id, cycleId, pending, isLate);
+    await i.editReply({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('✅ Report Submitted').setDescription('Your weekly report has been submitted and posted for review.').setTimestamp()] });
+  }
+
+  else if (action === 'wr_edit') {
+    const pending = (await sql`SELECT * FROM weekly_report_pending WHERE user_id = ${i.user.id} AND cycle_id = ${cycleId}`)[0];
+    await i.showModal({
+      customId: `wr_modal1:${cycleId}`,
+      title: 'Edit Report — Part 1 of 2',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'issues', label: '📉 Marketplace/System Issues', style: 2, required: true, minLength: 50, maxLength: 1000, value: pending?.section_issues ?? '' }] },
+        { type: 1, components: [{ type: 4, customId: 'mistakes', label: '🔁 Repeated PA Mistakes', style: 2, required: true, minLength: 50, maxLength: 1000, value: pending?.section_mistakes ?? '' }] },
+        { type: 1, components: [{ type: 4, customId: 'weaknesses', label: '⚖️ System Weaknesses', style: 2, required: true, minLength: 50, maxLength: 1000, value: pending?.section_weaknesses ?? '' }] },
+      ]
+    });
+  }
+
+  else if (action === 'wr_modal2_trigger') {
+    const pending = (await sql`SELECT * FROM weekly_report_pending WHERE user_id = ${i.user.id} AND cycle_id = ${cycleId}`)[0];
+    await i.showModal({
+      customId: `wr_modal2:${cycleId}`,
+      title: 'Weekly Report — Part 2 of 2',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'risks', label: '🚨 Risks/Emerging Problems', style: 2, required: true, minLength: 50, maxLength: 1000, placeholder: 'Any new risks or behaviours appearing?', value: pending?.section_risks ?? '' }] },
+        { type: 1, components: [{ type: 4, customId: 'suggestions', label: '💡 Improvement Suggestions', style: 2, required: true, minLength: 50, maxLength: 1000, placeholder: 'What should be improved? Must be actionable.', value: pending?.section_suggestions ?? '' }] },
+        { type: 1, components: [{ type: 4, customId: 'reflection', label: '👤 Self Reflection', style: 2, required: true, minLength: 50, maxLength: 1000, placeholder: 'What could you have done better this week?', value: pending?.section_reflection ?? '' }] },
+      ]
+    });
+  }
+}
+
 // ─── ESCALATION BUTTONS ───────────────────────────────────────────────────────
 async function handleEscalationButton(i: any, action: string, rest: string[]): Promise<void> {
   const escalationId = parseInt(rest[0]);
@@ -554,6 +649,113 @@ async function handleEscalationButton(i: any, action: string, rest: string[]): P
 
     await i.message.edit({ content: `<@&${config.roles.HPA}> This escalation has been escalated to HPA.`, embeds: [buildEscalationEmbed(updated)], components: [hpaRow] });
     await i.reply({ content: '⬆️ Escalated to HPA.', ephemeral: true });
+  }
+}
+
+// ─── AUDIT BUTTONS ────────────────────────────────────────────────────────────
+async function handleAuditButton(i: any, action: string, rest: string[]): Promise<void> {
+  if (action === 'audit_done') {
+    const userId = rest[0];
+    if (i.user.id !== userId) { await i.reply({ content: 'This reminder is not for you.', ephemeral: true }); return; }
+
+    const cfg    = await getConfig(userId);
+    const today  = new Date().toISOString().split('T')[0];
+    const dayLog = await getOrCreateDailyLog(userId, today);
+
+    if (dayLog.done_clicked) { await i.update({ content: '✅ Already marked as done today.', components: [] }); return; }
+
+    // Check how many logs submitted today
+    const submitted = dayLog.submitted || 0;
+    const underperformThreshold = Math.floor((cfg.soft_target * (cfg.underperform_pct || 50)) / 100);
+    const underperformed = submitted < underperformThreshold;
+
+    await sql`UPDATE spa_daily_logs SET done_clicked = true, underperformed = ${underperformed} WHERE user_id = ${userId} AND log_date = ${today}`;
+
+    if (underperformed) {
+      // Notify HPA
+      try {
+        const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
+        await ch.send({ content: `<@&${config.roles.HPA}> ⚠️ **Underperformance Note** — <@${userId}> clicked Done but only submitted **${submitted}** logs today (target: ${cfg.soft_target}, underperform threshold: ${underperformThreshold}).` });
+      } catch { /* silent */ }
+      await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Orange).setTitle('⚠️ Marked as Done (Underperformed)').setDescription(`You submitted ${submitted} logs today. Your target is ${cfg.soft_target}. This has been noted.`).setTimestamp()], components: [] });
+    } else {
+      await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('✅ Done!').setDescription(`Great work today! ${submitted} logs submitted.`).setTimestamp()], components: [] });
+    }
+  }
+
+  else if (action === 'audit_cant') {
+    const userId = rest[0];
+    if (i.user.id !== userId) { await i.reply({ content: 'This reminder is not for you.', ephemeral: true }); return; }
+
+    await i.showModal({
+      customId: `audit_cant_modal:${userId}`,
+      title: "Can't Do Logs Today",
+      components: [{ type: 1, components: [{ type: 4, customId: 'reason', label: 'Reason', style: 2, required: true, minLength: 5, maxLength: 500 }] }]
+    });
+  }
+
+  else if (action === 'audit_add_flag') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    const targetId = rest[0];
+
+    const selectOptions = BEHAVIOUR_FLAGS.map((f, idx) => ({
+      label: f.slice(0, 100),
+      value: String(idx),
+    }));
+
+    await i.reply({
+      content: `Add behaviour flag to <@${targetId}>:`,
+      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder().setCustomId(`audit_flag_type:${targetId}`).setPlaceholder('Select flag type').addOptions(
+          selectOptions.map(o => new StringSelectMenuOptionBuilder().setLabel(o.label).setValue(o.value))
+        )
+      )],
+      ephemeral: true,
+    });
+  }
+
+  else if (action === 'audit_clear_flag') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    const targetId = rest[0];
+    const flags = await sql`SELECT * FROM spa_stat_flags WHERE user_id = ${targetId} AND active = true`;
+    if (flags.length === 0) { await i.reply({ content: 'No active stat flags.', ephemeral: true }); return; }
+    await sql`UPDATE spa_stat_flags SET active = false, cleared_at = NOW(), cleared_by = ${i.user.id} WHERE user_id = ${targetId} AND active = true`;
+    await i.reply({ content: `✅ All stat flags cleared for <@${targetId}>.`, ephemeral: true });
+  }
+
+  else if (action === 'audit_clear_cant') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    const targetId = rest[0];
+    await sql`UPDATE spa_cant_do_flags SET flagged = false, flagged_by = NULL, flagged_at = NULL WHERE user_id = ${targetId}`;
+    await i.reply({ content: `✅ Can't Do flag cleared for <@${targetId}>.`, ephemeral: true });
+  }
+
+  else if (action === 'audit_flag_senior') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    const targetId = rest[0];
+    await sql`INSERT INTO spa_cant_do_flags (user_id, flagged, flagged_by, flagged_at) VALUES (${targetId}, true, ${i.user.id}, NOW()) ON CONFLICT (user_id) DO UPDATE SET flagged = true, flagged_by = ${i.user.id}, flagged_at = NOW()`;
+    await i.update({ components: [] });
+    await i.followUp({ content: `🚩 <@${targetId}> has been flagged. Future Can't Do responses will ping you.`, ephemeral: true });
+  }
+
+  else if (action === 'flag_keep') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    const flagId = parseInt(rest[0]);
+    await sql`UPDATE spa_behaviour_flags SET expires_at = NOW() + INTERVAL '30 days', expiry_prompted = false WHERE id = ${flagId}`;
+    await i.update({ content: '⏳ Flag extended by 30 days.', components: [] });
+  }
+
+  else if (action === 'flag_expire') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    const flagId = parseInt(rest[0]);
+    await sql`DELETE FROM spa_behaviour_flags WHERE id = ${flagId}`;
+    await i.update({ content: '✅ Flag removed.', components: [] });
   }
 }
 
@@ -804,6 +1006,42 @@ async function handleSuggestionButton(i: any, action: string, rest: string[]): P
 async function handleSelect(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
+  if (action === 'audit_flag_type') {
+    const targetId  = rest[0];
+    const flagIndex = parseInt(i.values[0]);
+    const flagType  = BEHAVIOUR_FLAGS[flagIndex];
+    await i.showModal({
+      customId: `audit_add_flag_modal:${targetId}:${flagIndex}`,
+      title: 'Add Behaviour Flag',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'note', label: 'Note (optional)', style: 2, required: false, maxLength: 500 }] },
+        { type: 1, components: [{ type: 4, customId: 'notify', label: 'Notify senior? (yes/no)', style: 1, required: true, maxLength: 3, value: 'no' }] },
+      ]
+    });
+    return;
+  }
+
+  if (action === 'wr_tags') {
+    // customId: wr_tags:cycleId:sectionKey
+    const cycleId    = parseInt(rest[0]);
+    const sectionKey = rest[1];
+    const tags       = i.values as string[];
+
+    // Check if Other selected — need a label
+    if (tags.includes('Other')) {
+      await i.showModal({
+        customId: `wr_other_label:${cycleId}:${sectionKey}`,
+        title: 'Label for "Other" Tag',
+        components: [{ type: 1, components: [{ type: 4, customId: 'label', label: 'Brief label (max 30 chars)', style: 1, required: true, maxLength: 30, placeholder: 'e.g. UI Clarity' }] }]
+      });
+    } else {
+      await storeTags(i.user.id, cycleId, sectionKey, tags, null);
+      await i.update({ content: '✅ Tags saved! Continue with the next step.', components: [] });
+      await showNextTagsOrModal(i, cycleId, sectionKey);
+    }
+    return;
+  }
+
   if (action === 'esc_action_select') {
     const selectedAction = i.values[0];
     const actionTitles: Record<string, string> = {
@@ -929,6 +1167,11 @@ async function handleModal(i: any): Promise<void> {
     await sql`DELETE FROM pending_logs WHERE id = ${pendingId}`;
     await sql`DELETE FROM used_post_ids WHERE post_id = ${pending.post_id}`;
     await safeDM(i.client, pending.logged_by, warningEmbed(`Log Denied - Post ID: ${pending.post_id}`, `Your log against <@${pending.user_id}> was denied.\n\n**Reason:** ${reason}`), 'log denied');
+    // Track in SPA audit
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await sql`INSERT INTO spa_daily_logs (user_id, log_date, submitted, denied) VALUES (${pending.logged_by}, ${today}, 1, 1) ON CONFLICT (user_id, log_date) DO UPDATE SET submitted = spa_daily_logs.submitted + 1, denied = spa_daily_logs.denied + 1`;
+    } catch { /* silent */ }
     await i.editReply({ embeds: [successEmbed('Denied', 'Log denied and logger notified.')] });
   }
 
@@ -1286,6 +1529,219 @@ async function handleModal(i: any): Promise<void> {
     console.log(`Decline DM sent to ${sug.submitted_by}: ${dmSent}`);
 
     await i.editReply({ embeds: [successEmbed('Declined', `Suggestion #${suggId} declined and submitter notified.`)] });
+  }
+
+  // ─── AUDIT MODALS ─────────────────────────────────────────────────────────
+  else if (action === 'audit_cant_modal') {
+    const userId = rest[0];
+    const reason = i.fields.getTextInputValue('reason').trim();
+    const today  = new Date().toISOString().split('T')[0];
+
+    await sql`
+      INSERT INTO spa_daily_logs (user_id, log_date, cant_do, cant_do_reason)
+      VALUES (${userId}, ${today}, true, ${reason})
+      ON CONFLICT (user_id, log_date) DO UPDATE SET cant_do = true, cant_do_reason = ${reason}
+    `;
+
+    await i.deferUpdate().catch(() => {});
+    try { await i.message.edit({ embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle("❌ Can't Do — Noted").setDescription('Your response has been logged and forwarded to HPA.').setTimestamp()], components: [] }); } catch { /* silent */ }
+
+    // Check if flagged
+    const flagStatus = await sql`SELECT * FROM spa_cant_do_flags WHERE user_id = ${userId}`;
+    const isFlagged  = flagStatus[0]?.flagged ?? false;
+
+    const flagBtn = new ButtonBuilder().setCustomId(`audit_flag_senior:${userId}`).setLabel('🚩 Flag Senior').setStyle(ButtonStyle.Danger);
+    const noteEmbed = new EmbedBuilder()
+      .setColor(Colors.Orange)
+      .setTitle(`❌ Can't Do — <@${userId}>`)
+      .addFields({ name: 'Reason', value: reason })
+      .setFooter({ text: isFlagged ? '🚩 This senior is currently flagged' : 'Not flagged' })
+      .setTimestamp();
+
+    try {
+      const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
+      const content = isFlagged ? `<@&${config.roles.HPA}> ⚠️ Flagged senior submitted Can't Do:` : `<@&${config.roles.HPA}> Senior Can't Do response:`;
+      await ch.send({ content, embeds: [noteEmbed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(flagBtn)] });
+    } catch { /* silent */ }
+  }
+
+  else if (action === 'audit_add_flag_modal') {
+    await i.deferReply({ ephemeral: true });
+    const targetId  = rest[0];
+    const flagIndex = parseInt(rest[1]);
+    const flagType  = BEHAVIOUR_FLAGS[flagIndex] ?? 'Unknown Flag';
+    const note      = i.fields.getTextInputValue('note').trim() || null;
+    const notify    = i.fields.getTextInputValue('notify').trim().toLowerCase() === 'yes';
+
+    await sql`
+      INSERT INTO spa_behaviour_flags (user_id, flag_type, note, added_by, notify_senior)
+      VALUES (${targetId}, ${flagType}, ${note}, ${i.user.id}, ${notify})
+    `;
+
+    if (notify) {
+      await dmUser(i.client, targetId, {
+        embeds: [new EmbedBuilder().setColor(Colors.Orange).setTitle('⚠️ Behaviour Flag Added').setDescription(`A behaviour flag has been added to your profile: **${flagType}**${note ? `\n\n**Note:** ${note}` : ''}`).setTimestamp()]
+      });
+    }
+
+    await i.editReply({ embeds: [successEmbed('Flag Added', `**${flagType}** added to <@${targetId}>${note ? ` with note: ${note}` : ''}.${notify ? ' Senior has been notified.' : ''}`)] });
+  }
+
+  // ─── WEEKLY REPORT MODALS ─────────────────────────────────────────────────
+  else if (action === 'wr_modal1') {
+    const cycleId  = parseInt(rest[0]);
+    const issues   = i.fields.getTextInputValue('issues').trim();
+    const mistakes = i.fields.getTextInputValue('mistakes').trim();
+    const weaknesses = i.fields.getTextInputValue('weaknesses').trim();
+
+    // Quality check
+    const banned = ['no issues', 'everything fine', 'n/a', 'nothing', 'all good', 'no problems', 'all fine', 'none', 'all clear'];
+    const failed: string[] = [];
+    if ([issues, mistakes, weaknesses].some(t => banned.some(b => t.toLowerCase().includes(b)))) {
+      failed.push('One or more sections contain low-effort phrases.');
+    }
+    if (issues.length < 50) failed.push('Marketplace/System Issues is too short.');
+    if (mistakes.length < 50) failed.push('Repeated PA Mistakes is too short.');
+    if (weaknesses.length < 50) failed.push('System Weaknesses is too short.');
+
+    if (failed.length > 0) {
+      await i.reply({
+        embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('❌ Report Rejected').setDescription(`Your report was rejected for the following reasons:\n\n${failed.map(f => `• ${f}`).join('\n')}\n\nPlease try again with more detailed responses.`).setTimestamp()],
+        components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`wr_submit:${cycleId}`).setLabel('📝 Try Again').setStyle(ButtonStyle.Primary))],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // Save to pending
+    await sql`
+      INSERT INTO weekly_report_pending (user_id, cycle_id, section_issues, section_mistakes, section_weaknesses, step)
+      VALUES (${i.user.id}, ${cycleId}, ${issues}, ${mistakes}, ${weaknesses}, 'tags1')
+      ON CONFLICT (user_id) DO UPDATE SET
+        cycle_id = ${cycleId}, section_issues = ${issues}, section_mistakes = ${mistakes},
+        section_weaknesses = ${weaknesses}, step = 'tags1', updated_at = NOW()
+    `;
+
+    await i.reply({
+      content: '**Part 1 saved!** Now tag the themes for each section (optional but encouraged):',
+      components: [buildTagSelect('issues', cycleId, '📉 Marketplace/System Issues')],
+      ephemeral: true,
+    });
+  }
+
+  else if (action === 'wr_modal2') {
+    const cycleId  = parseInt(rest[0]);
+    const risks    = i.fields.getTextInputValue('risks').trim();
+    const suggestions = i.fields.getTextInputValue('suggestions').trim();
+    const reflection  = i.fields.getTextInputValue('reflection').trim();
+
+    const banned = ['no issues', 'everything fine', 'n/a', 'nothing', 'all good', 'no problems', 'all fine', 'none', 'all clear'];
+    const failed: string[] = [];
+    if (risks.length < 50) failed.push('Risks/Emerging Problems is too short.');
+    if (suggestions.length < 50) failed.push('Improvement Suggestions is too short.');
+    if (reflection.length < 50) failed.push('Self Reflection is too short.');
+    if ([risks, suggestions, reflection].some(t => banned.some(b => t.toLowerCase().includes(b)))) failed.push('One or more sections contain low-effort phrases.');
+
+    if (failed.length > 0) {
+      await i.reply({
+        embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('❌ Report Rejected').setDescription(`Your report was rejected:\n\n${failed.map(f => `• ${f}`).join('\n')}\n\nPlease try again.`).setTimestamp()],
+        components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`wr_submit:${cycleId}`).setLabel('📝 Restart').setStyle(ButtonStyle.Primary))],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await sql`
+      UPDATE weekly_report_pending SET
+        section_risks = ${risks}, section_suggestions = ${suggestions},
+        section_reflection = ${reflection}, step = 'tags2', updated_at = NOW()
+      WHERE user_id = ${i.user.id} AND cycle_id = ${cycleId}
+    `;
+
+    await i.reply({
+      content: '**Part 2 saved!** Now tag the themes for each section:',
+      components: [buildTagSelect('risks', cycleId, '🚨 Risks/Emerging Problems')],
+      ephemeral: true,
+    });
+  }
+
+  else if (action === 'wr_other_label') {
+    const cycleId    = parseInt(rest[0]);
+    const sectionKey = rest[1];
+    const label      = i.fields.getTextInputValue('label').trim();
+
+    await storeTags(i.user.id, cycleId, sectionKey, ['Other'], label);
+    await i.deferUpdate().catch(() => {});
+    await showNextTagsOrModal(i, cycleId, sectionKey);
+  }
+}
+
+// ─── WEEKLY REPORT HELPERS ────────────────────────────────────────────────────
+async function storeTags(userId: string, cycleId: number, sectionKey: string, tags: string[], otherLabel: string | null): Promise<void> {
+  try {
+    if (sectionKey === 'issues') {
+      await sql`UPDATE weekly_report_pending SET tags_issues = ${tags}, other_label_issues = ${otherLabel}, updated_at = NOW() WHERE user_id = ${userId} AND cycle_id = ${cycleId}`;
+    } else if (sectionKey === 'mistakes') {
+      await sql`UPDATE weekly_report_pending SET tags_mistakes = ${tags}, other_label_mistakes = ${otherLabel}, updated_at = NOW() WHERE user_id = ${userId} AND cycle_id = ${cycleId}`;
+    } else if (sectionKey === 'weaknesses') {
+      await sql`UPDATE weekly_report_pending SET tags_weaknesses = ${tags}, other_label_weaknesses = ${otherLabel}, updated_at = NOW() WHERE user_id = ${userId} AND cycle_id = ${cycleId}`;
+    } else if (sectionKey === 'risks') {
+      await sql`UPDATE weekly_report_pending SET tags_risks = ${tags}, other_label_risks = ${otherLabel}, updated_at = NOW() WHERE user_id = ${userId} AND cycle_id = ${cycleId}`;
+    } else if (sectionKey === 'suggestions') {
+      await sql`UPDATE weekly_report_pending SET tags_suggestions = ${tags}, other_label_suggestions = ${otherLabel}, updated_at = NOW() WHERE user_id = ${userId} AND cycle_id = ${cycleId}`;
+    }
+  } catch (e) { console.error('Failed to store tags:', e); }
+}
+
+async function showNextTagsOrModal(i: any, cycleId: number, currentSection: string): Promise<void> {
+  const section1Flow = ['issues', 'mistakes', 'weaknesses'];
+  const section2Flow = ['risks', 'suggestions'];
+
+  const idx1 = section1Flow.indexOf(currentSection);
+  const idx2 = section2Flow.indexOf(currentSection);
+
+  const sectionLabels: Record<string, string> = {
+    issues: '📉 Marketplace/System Issues', mistakes: '🔁 Repeated PA Mistakes',
+    weaknesses: '⚖️ System Weaknesses', risks: '🚨 Risks/Emerging Problems',
+    suggestions: '💡 Improvement Suggestions',
+  };
+
+  if (idx1 >= 0 && idx1 < section1Flow.length - 1) {
+    const next = section1Flow[idx1 + 1];
+    await i.editReply({ content: `Tags saved! Now tag: **${sectionLabels[next]}**`, components: [buildTagSelect(next, cycleId, sectionLabels[next])] }).catch(() => {});
+  } else if (currentSection === 'weaknesses') {
+    // Done with part 1 tags — show modal 2
+    await i.editReply({ content: 'Tags for Part 1 saved! Now complete Part 2:', components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`wr_modal2_trigger:${cycleId}`).setLabel('📝 Continue to Part 2').setStyle(ButtonStyle.Primary))] }).catch(() => {});
+  } else if (idx2 >= 0 && idx2 < section2Flow.length - 1) {
+    const next = section2Flow[idx2 + 1];
+    await i.editReply({ content: `Tags saved! Now tag: **${sectionLabels[next]}**`, components: [buildTagSelect(next, cycleId, sectionLabels[next])] }).catch(() => {});
+  } else if (currentSection === 'suggestions') {
+    // Done with all tags — show preview
+    const pending = (await sql`SELECT * FROM weekly_report_pending WHERE user_id = ${i.user.id} AND cycle_id = ${cycleId}`)[0];
+    if (!pending) return;
+
+    const cfg = await getReportConfig();
+    const { score } = scoreReport(pending, cfg);
+
+    const preview = new EmbedBuilder()
+      .setColor(Colors.Blue)
+      .setTitle('📋 Report Preview — Please Confirm')
+      .setDescription('Review your report below. Once confirmed it cannot be changed.')
+      .addFields(
+        { name: '📉 Issues', value: pending.section_issues.slice(0, 300) },
+        { name: '🔁 Mistakes', value: pending.section_mistakes.slice(0, 300) },
+        { name: '⚖️ Weaknesses', value: pending.section_weaknesses.slice(0, 300) },
+        { name: '🚨 Risks', value: pending.section_risks?.slice(0, 300) ?? 'Pending' },
+        { name: '💡 Suggestions', value: pending.section_suggestions?.slice(0, 300) ?? 'Pending' },
+        { name: '👤 Reflection', value: pending.section_reflection?.slice(0, 300) ?? 'Pending' },
+        { name: '📊 Est. Quality Score', value: `${score}/100` },
+      )
+      .setTimestamp();
+
+    const confirmBtn = new ButtonBuilder().setCustomId(`wr_confirm:${cycleId}`).setLabel('✅ Confirm & Submit').setStyle(ButtonStyle.Success);
+    const editBtn    = new ButtonBuilder().setCustomId(`wr_edit:${cycleId}`).setLabel('✏️ Edit').setStyle(ButtonStyle.Secondary);
+
+    await i.editReply({ content: '', embeds: [preview], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(confirmBtn, editBtn)] }).catch(() => {});
   }
 }
 
