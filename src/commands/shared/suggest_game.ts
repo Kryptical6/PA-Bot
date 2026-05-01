@@ -5,7 +5,7 @@ import { sql } from '../../database/client';
 import { config } from '../../config';
 
 export const data = new SlashCommandBuilder()
-  .setName('suggest_game')
+  .setName('game_suggest')
   .setDescription('Suggest a game for game night')
   .addStringOption(o => o.setName('game').setDescription('Game name').setRequired(true))
   .addStringOption(o => o.setName('description').setDescription('Why should we play this? (optional)'));
@@ -48,7 +48,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const deny    = new ButtonBuilder().setCustomId(`gs_deny:${result.id}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger);
 
   try {
-    const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
+    const ch = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
     await ch.send({ content: `<@&${config.roles.HPA}> New game suggestion`, embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, deny)] });
   } catch (e) { console.error('Failed to send suggestion:', e); }
 
