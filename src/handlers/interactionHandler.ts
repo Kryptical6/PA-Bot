@@ -143,7 +143,7 @@ async function handleButton(i: any): Promise<void> {
   if (suggestionActions.includes(action)) { await handleSuggestionButton(i, action, rest); return; }
 
   // Audit buttons
-  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior'];
+  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior', 'audit_ignore_underperform'];
   if (auditActions.includes(action)) { await handleAuditButton(i, action, rest); return; }
 
   // Weekly report buttons
@@ -672,10 +672,17 @@ async function handleAuditButton(i: any, action: string, rest: string[]): Promis
     await sql`UPDATE spa_daily_logs SET done_clicked = true, underperformed = ${underperformed} WHERE user_id = ${userId} AND log_date = ${today}`;
 
     if (underperformed) {
-      // Notify HPA
+      // Notify HPA with ignore button
       try {
         const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
-        await ch.send({ content: `<@&${config.roles.HPA}> ⚠️ **Underperformance Note** — <@${userId}> clicked Done but only submitted **${submitted}** logs today (target: ${cfg.soft_target}, underperform threshold: ${underperformThreshold}).` });
+        const ignoreBtn = new ButtonBuilder()
+          .setCustomId(`audit_ignore_underperform:${userId}:${today}`)
+          .setLabel('✅ Ignore Underperformance')
+          .setStyle(ButtonStyle.Secondary);
+        await ch.send({
+          content: `<@&${config.roles.HPA}> ⚠️ **Underperformance Note** — <@${userId}> clicked Done but only submitted **${submitted}** logs today (target: ${cfg.soft_target}, threshold: ${underperformThreshold}).`,
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(ignoreBtn)],
+        });
       } catch { /* silent */ }
       await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Orange).setTitle('⚠️ Marked as Done (Underperformed)').setDescription(`You submitted ${submitted} logs today. Your target is ${cfg.soft_target}. This has been noted.`).setTimestamp()], components: [] });
     } else {
@@ -731,6 +738,15 @@ async function handleAuditButton(i: any, action: string, rest: string[]): Promis
     const targetId = rest[0];
     await sql`UPDATE spa_cant_do_flags SET flagged = false, flagged_by = NULL, flagged_at = NULL WHERE user_id = ${targetId}`;
     await i.reply({ content: `✅ Can't Do flag cleared for <@${targetId}>.`, ephemeral: true });
+  }
+
+  else if (action === 'audit_ignore_underperform') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    const targetId = rest[0];
+    const date     = rest[1];
+    await sql`UPDATE spa_daily_logs SET underperformed = false WHERE user_id = ${targetId} AND log_date = ${date}`;
+    await i.update({ content: `✅ Underperformance for <@${targetId}> on ${date} marked as ignored.`, components: [] });
   }
 
   else if (action === 'audit_flag_senior') {

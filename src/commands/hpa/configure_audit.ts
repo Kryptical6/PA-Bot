@@ -21,6 +21,8 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(o => o.setName('accuracy_threshold').setDescription('Override global accuracy threshold for this senior').setMinValue(1).setMaxValue(100))
     .addIntegerOption(o => o.setName('below_target_days').setDescription('Override global below-target days for this senior').setMinValue(1).setMaxValue(14))
     .addIntegerOption(o => o.setName('improvement_days').setDescription('Override global improvement days for this senior').setMinValue(1).setMaxValue(14))
+    .addUserOption(o => o.setName('reminder_person').setDescription('User to ping in the daily reminder DM'))
+    .addStringOption(o => o.setName('reminder_channel').setDescription('Channel ID or Discord link (https://discord.com/channels/...) to link in the reminder'))
   );
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
@@ -61,21 +63,30 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   }
 
   if (sub === 'senior') {
-    const user  = i.options.getUser('user', true);
-    const hour  = i.options.getInteger('reminder_hour');
-    const tgt   = i.options.getInteger('soft_target');
-    const acc   = i.options.getInteger('accuracy_threshold');
-    const below = i.options.getInteger('below_target_days');
-    const impr  = i.options.getInteger('improvement_days');
+    const user        = i.options.getUser('user', true);
+    const hour        = i.options.getInteger('reminder_hour');
+    const tgt         = i.options.getInteger('soft_target');
+    const acc         = i.options.getInteger('accuracy_threshold');
+    const below       = i.options.getInteger('below_target_days');
+    const impr        = i.options.getInteger('improvement_days');
+    const personUser  = i.options.getUser('reminder_person');
+    const chanRaw     = i.options.getString('reminder_channel');
+    const personId    = personUser ? personUser.id : null;
+    // Extract channel ID from a full Discord URL or treat as raw ID
+    const channelId   = chanRaw
+      ? (chanRaw.match(/(\d{17,20})(?:\s*$)/)?.[1] ?? chanRaw.trim())
+      : null;
 
     await sql`INSERT INTO spa_audit_config (user_id) VALUES (${user.id}) ON CONFLICT DO NOTHING`;
     await sql`
       UPDATE spa_audit_config SET
-        reminder_hour      = COALESCE(${hour},  reminder_hour),
-        soft_target        = COALESCE(${tgt},   soft_target),
-        accuracy_threshold = COALESCE(${acc},   accuracy_threshold),
-        below_target_days  = COALESCE(${below}, below_target_days),
-        improvement_days   = COALESCE(${impr},  improvement_days),
+        reminder_hour      = COALESCE(${hour},      reminder_hour),
+        soft_target        = COALESCE(${tgt},       soft_target),
+        accuracy_threshold = COALESCE(${acc},       accuracy_threshold),
+        below_target_days  = COALESCE(${below},     below_target_days),
+        improvement_days   = COALESCE(${impr},      improvement_days),
+        reminder_person    = COALESCE(${personId},  reminder_person),
+        reminder_channel   = COALESCE(${channelId}, reminder_channel),
         updated_at = NOW()
       WHERE user_id = ${user.id}
     `;
@@ -84,9 +95,11 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     await i.editReply({ embeds: [successEmbed(`Config Updated — ${user.username}`, [
       `Reminder Time: **${current.reminder_hour}:00 UTC**`,
       `Soft Target: **${current.soft_target} logs/day**`,
-      tgt   ? `Accuracy Threshold: **${current.accuracy_threshold}%**` : null,
-      below ? `Below-Target Days: **${current.below_target_days}**` : null,
-      impr  ? `Improvement Days: **${current.improvement_days}**` : null,
+      acc       ? `Accuracy Threshold: **${current.accuracy_threshold}%**` : null,
+      below     ? `Below-Target Days: **${current.below_target_days}**` : null,
+      impr      ? `Improvement Days: **${current.improvement_days}**` : null,
+      personId  ? `Reminder Person: <@${current.reminder_person}>` : null,
+      channelId ? `Reminder Channel: <#${current.reminder_channel}>` : null,
     ].filter(Boolean).join('\n'))] });
   }
 }

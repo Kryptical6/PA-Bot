@@ -269,10 +269,18 @@ export async function sendDailyReminders(client: Client): Promise<void> {
       const alreadySent = await sql`SELECT 1 FROM spa_daily_logs WHERE user_id = ${member.id} AND log_date = ${today} AND (done_clicked = true OR cant_do = true)`;
       if (alreadySent.length > 0) continue;
 
+      // Build custom reminder text
+      const personText  = cfg.reminder_person  ? `for <@${cfg.reminder_person}>` : null;
+      const channelText = cfg.reminder_channel ? `in <#${cfg.reminder_channel}>` : null;
+      const contextLine = [personText, channelText].filter(Boolean).join(' ');
+      const descLine = contextLine
+        ? `Please review posts ${contextLine} and submit your logs for today.`
+        : 'Please review posts and submit your logs for today.';
+
       const embed = new EmbedBuilder()
         .setColor(Colors.Blue)
         .setTitle('📋 Daily Log Reminder')
-        .setDescription(`Hey ${member.displayName}! It's time for your daily post review session.\n\nPlease review posts and submit your logs for today.`)
+        .setDescription(`Hey ${member.displayName}! It's time for your daily post review session.\n\n${descLine}`)
         .addFields({ name: 'Daily Target', value: `${cfg.soft_target} logs` })
         .setTimestamp();
 

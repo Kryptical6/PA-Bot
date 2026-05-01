@@ -10,63 +10,42 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const embed = new EmbedBuilder().setColor(Colors.Blue).setTitle('📖 Staff Bot Commands').setTimestamp();
 
   embed.addFields({ name: '👤 All Staff', value: [
-    '`/help` - Show this menu',
-    '`/my_logs` - View your active logs',
-    '`/appeal` - Appeal an active mistake',
-    '`/tag` - View a knowledge base tag',
-    '`/tag_search` - Search tags by keyword',
-    '`/pa_assessment` - Start an assessment',
-    '`/escalate` - Escalate a post to a senior',
-    '`/my_escalations` - View your escalation requests',
-    '`/spa_quota` - View your SPA log quota and stats',
-    '`/game_suggest` - Suggest a game for game night',
-    '`/game_suggestions` - View approved game suggestions',
+    '`/help` `/my_logs` `/appeal`',
+    '`/tag` `/tag_search`',
+    '`/pa_assessment` `/escalate` `/my_escalations`',
+    '`/game_suggest` `/game_suggestions` `/suggest`',
   ].join('\n') });
 
-  if (isSPA(m)) embed.addFields({ name: '🔹 SPA Commands', value: [
-    '`/log_mistake` - Submit a mistake for review',
-    '`/staff_profile` - View a staff member profile',
-    '`/staff_overview` - View all staff logs',
-    '`/lookup_post` - Search a post ID',
-    '`/warn_user` - Send a formal warning DM',
-    '`/create_vote` - Create a staff vote',
-    '`/list_assessments` - View available assessments',
-    '`/create_tag` - Create a knowledge base tag',
-    '`/edit_tag` - Edit a tag',
-    '`/delete_tag` - Delete a tag',
-    '`/create_embed` - Post a custom embed',
-    '`/edit_embed` - Edit an existing embed',
-    '`/edit_game_night` - Edit a scheduled game night',
-    '`/view_escalations` - View all open escalations',
-    '`/search_suggestions` - Search department suggestions',
+  if (isSPA(m)) embed.addFields({ name: '🔹 SPA', value: [
+    '`/log_mistake` `/staff_profile` `/staff_overview`',
+    '`/lookup_post` `/warn_user` `/create_vote` `/spa_quota`',
+    '`/list_assessments`',
+    '`/create_tag` `/edit_tag` `/delete_tag`',
+    '`/create_embed` `/edit_embed`',
+    '`/edit_game_night` `/view_escalations` `/search_suggestions`',
   ].join('\n') });
 
-  if (isHPA(m)) embed.addFields({ name: '🔸 HPA Commands', value: [
-    '`/force_strike` - Issue a strike directly',
-    '`/manage_log` - Edit, remove, or transfer a log',
-    '`/set_escalation` - Set the escalation rate',
-    '`/recalculate_escalation` - Re-evaluate all staff',
-    '`/notify_user` - Send a structured DM',
-    '`/bulk_actions` - Run bulk operations',
-    '`/manage_log_tracker` - Manage the log tracker embed',
-    '`/create_assessment` - Create an assessment',
-    '`/create_assessment_question` - Add a question',
-    '`/edit_assessment_question` - Edit a question',
-    '`/delete_assessment_question` - Delete a question',
-    '`/publish_assessment` - Publish/unpublish an assessment',
-    '`/restrict_assessment` - Restrict assessment access',
-    '`/view_assessment_results` - View user results',
-    '`/view_active_sessions` - See in-progress sessions',
-    '`/create_game_night` - Schedule a game night',
-    '`/cancel_game_night` - Cancel a game night',
-    '`/delete_suggestion` - Remove a game suggestion',
-    '`/clear_stale` - Clear stale pending logs or appeals',
-    '`/create_feedback` - Create a PA feedback round',
-    '`/close_feedback` - Close a feedback round early',
-    '`/view_spa_audit` - View full SPA audit report',
-    '`/configure_audit` - Configure SPA audit settings',
-    '`/clear_spa_flag` - Clear a stat flag on a senior',
-  ].join('\n') });
+  if (isHPA(m)) {
+    embed.addFields({ name: '🔸 HPA — Logs & Staff', value: [
+      '`/force_strike` `/manage_log` `/clear_stale`',
+      '`/set_escalation` `/recalculate_escalation`',
+      '`/notify_user` `/bulk_actions` `/manage_log_tracker`',
+    ].join('\n') });
+    embed.addFields({ name: '🔸 HPA — Assessments', value: [
+      '`/create_assessment` `/publish_assessment` `/restrict_assessment`',
+      '`/create_assessment_question` `/edit_assessment_question` `/delete_assessment_question`',
+      '`/view_assessment_results` `/view_active_sessions`',
+    ].join('\n') });
+    embed.addFields({ name: '🔸 HPA — Game Night & Content', value: [
+      '`/create_game_night` `/cancel_game_night` `/delete_suggestion`',
+      '`/create_feedback` `/close_feedback`',
+      '`/create_embed` `/edit_embed`',
+    ].join('\n') });
+    embed.addFields({ name: '🔸 HPA — Audit & Reports', value: [
+      '`/view_spa_audit` `/configure_audit` `/clear_spa_flag`',
+      '`/setup_weekly_report` `/trigger_weekly_report` `/view_report_status`',
+    ].join('\n') });
+  }
 
   await i.reply({ embeds: [embed], ephemeral: true });
 }
