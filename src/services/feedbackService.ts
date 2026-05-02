@@ -107,6 +107,7 @@ export async function checkFeedbackReminders(client: Client): Promise<void> {
   const rounds = await sql`
     SELECT * FROM feedback_rounds
     WHERE status = 'active' AND closes_at <= ${in24.toISOString()} AND closes_at > ${now.toISOString()}
+    AND id NOT IN (SELECT DISTINCT round_id FROM feedback_pending WHERE general_thoughts = 'reminder_sent')
   `;
 
   for (const round of rounds) {
@@ -147,11 +148,16 @@ export async function checkFeedbackReminders(client: Client): Promise<void> {
       }
     } catch { /* silent */ }
 
-    await sql`UPDATE feedback_rounds SET status = 'reminder_sent' WHERE id = ${round.id}`;
+    // Track that we've sent reminders for this round using a sentinel row
+    await sql`
+      INSERT INTO feedback_pending (user_id, round_id, general_thoughts)
+      VALUES ('reminder_sent', ${round.id}, 'reminder_sent')
+      ON CONFLICT DO NOTHING
+    `.catch(() => {});
   }
 
-  // Auto-close overdue rounds
-  const overdue = await sql`SELECT * FROM feedback_rounds WHERE status IN ('active', 'reminder_sent') AND closes_at <= ${now.toISOString()}`;
+  // Auto-close overdue active rounds
+  const overdue = await sql`SELECT * FROM feedback_rounds WHERE status = 'active' AND closes_at <= ${now.toISOString()}`;
   for (const round of overdue) {
     await closeFeedbackRound(client, round.id);
   }

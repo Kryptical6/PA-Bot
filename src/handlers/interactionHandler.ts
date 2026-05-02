@@ -2,7 +2,7 @@ import { Interaction, ChatInputCommandInteraction, GuildMember, TextChannel, Emb
 import { sql } from '../database/client';
 import { config } from '../config';
 import { isHPA, isSPA, isPA } from '../utils/permissions';
-import { successEmbed, errorEmbed, warningEmbed, pendingLogEmbed, infoEmbed } from '../utils/embeds';
+import { successEmbed, errorEmbed, warningEmbed, pendingLogEmbed, infoEmbed, appealEmbed } from '../utils/embeds';
 import { safeDM, dmUser } from '../services/dmService';
 import { checkEscalation } from '../services/escalationService';
 import { updateLogTracker } from '../services/logTrackerService';
@@ -39,7 +39,7 @@ import * as createGameNight from '../commands/hpa/create_game_night';
 import * as setupWeeklyReport from '../commands/hpa/setup_weekly_report';
 import * as triggerWeeklyReport from '../commands/hpa/trigger_weekly_report';
 import * as viewReportStatus from '../commands/hpa/view_report_status';
-import { getActiveCycle, buildTagSelect, finalizeReport, generateSummary, scoreReport, getConfig as getReportConfig, TAGS } from '../services/weeklyReportService';
+import { getActiveCycle, buildTagSelect, finalizeReport, generateSummary, scoreReport, getReportConfig, TAGS } from '../services/weeklyReportService';
 import * as createFeedback from '../commands/hpa/create_feedback';
 import * as closeFeedback from '../commands/hpa/close_feedback';
 import * as spaQuota from '../commands/spa/spa_quota';
@@ -1121,6 +1121,74 @@ async function handleSelect(i: any): Promise<void> {
 // ─── MODAL HANDLER ────────────────────────────────────────────────────────────
 async function handleModal(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
+
+  if (action === 'log_mistake') {
+    await i.deferReply({ ephemeral: true });
+    const targetId = rest[0];
+    const postId   = i.fields.getTextInputValue('post_id').trim();
+    const date     = i.fields.getTextInputValue('date').trim();
+    const reason   = i.fields.getTextInputValue('reason').trim();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      await i.editReply({ embeds: [errorEmbed('Invalid date. Use YYYY-MM-DD.')] }); return;
+    }
+
+    const guild = i.guild!;
+    const targetMember = await guild.members.fetch(targetId).catch(() => null);
+    if (!targetMember) { await i.editReply({ embeds: [errorEmbed('This user is no longer in the server.')] }); return; }
+
+    const existing = await sql`SELECT 1 FROM used_post_ids WHERE post_id = ${postId}`;
+    if (existing.length > 0) { await i.editReply({ embeds: [errorEmbed(`Post ID \`${postId}\` has already been logged.`)] }); return; }
+
+    const [result] = await sql`INSERT INTO pending_logs (user_id, post_id, reason, logged_by, date) VALUES (${targetId}, ${postId}, ${reason}, ${i.user.id}, ${date}) RETURNING id`;
+    await sql`INSERT INTO used_post_ids (post_id) VALUES (${postId}) ON CONFLICT DO NOTHING`;
+
+    const embed = pendingLogEmbed({ userId: targetId, postId, reason, loggedBy: i.user.id, date, pendingId: result.id });
+    const approve = new ButtonBuilder().setCustomId(`log_approve:${result.id}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success);
+    const editBtn = new ButtonBuilder().setCustomId(`log_edit:${result.id}`).setLabel('✏️ Edit Reason').setStyle(ButtonStyle.Primary);
+    const deny    = new ButtonBuilder().setCustomId(`log_deny:${result.id}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger);
+
+    const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
+    await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, deny)] });
+    await i.editReply({ embeds: [successEmbed('Submitted', 'Your log has been submitted for HPA review.')] });
+    return;
+  }
+
+  if (action === 'warn_user') {
+    await i.deferReply({ ephemeral: true });
+    const targetId = rest[0];
+    const reason   = i.fields.getTextInputValue('reason').trim();
+
+    try {
+      const user = await i.client.users.fetch(targetId);
+      await user.send({ embeds: [warningEmbed('Formal Warning', `You have received a formal warning from the staff team.\n\n**Reason:** ${reason}`)] });
+      await i.editReply({ embeds: [successEmbed('Warning Sent', `Warning DM sent to <@${targetId}>.`)] });
+    } catch {
+      await i.editReply({ embeds: [errorEmbed(`Failed to DM <@${targetId}>. They may have DMs disabled.`)] });
+    }
+    return;
+  }
+
+  if (action === 'appeal_modal') {
+    await i.deferReply({ ephemeral: true });
+    const logId  = parseInt(rest[0]);
+    const reason = i.fields.getTextInputValue('reason').trim();
+    const userId = i.user.id;
+
+    const logRows = await sql`SELECT * FROM logs WHERE id = ${logId} AND user_id = ${userId}`;
+    if (logRows.length === 0) { await i.editReply({ embeds: [errorEmbed('Log not found or not yours.')] }); return; }
+    const log = logRows[0];
+
+    const [result] = await sql`INSERT INTO appeals (user_id, log_id, reason) VALUES (${userId}, ${logId}, ${reason}) RETURNING id`;
+    const embed = appealEmbed({ userId, logId, reason, logType: log.type, logReason: log.reason, appealId: result.id });
+    const approve = new ButtonBuilder().setCustomId(`appeal_approve:${result.id}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success);
+    const deny    = new ButtonBuilder().setCustomId(`appeal_deny:${result.id}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger);
+
+    const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
+    await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, deny)] });
+    await i.editReply({ embeds: [successEmbed('Appeal Submitted', 'Your appeal has been sent to HPA.')] });
+    return;
+  }
 
   if (action === 'create_embed_modal') {
     const channelId = rest[0];

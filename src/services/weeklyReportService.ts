@@ -69,13 +69,13 @@ export async function getActiveCycle(): Promise<any | null> {
   return rows[0] ?? null;
 }
 
-export async function getConfig(): Promise<any> {
+export async function getReportConfig(): Promise<any> {
   return (await sql`SELECT * FROM weekly_report_config WHERE id = 1`)[0];
 }
 
 // ─── START CYCLE ──────────────────────────────────────────────────────────────
 export async function startWeeklyCycle(client: Client): Promise<void> {
-  const cfg = await getConfig();
+  const cfg = await getReportConfig();
   const existing = await getActiveCycle();
   if (existing) return; // already active
 
@@ -134,7 +134,7 @@ export function buildTagSelect(sectionKey: string, cycleId: number, label: strin
 
 // ─── SUBMIT REPORT ────────────────────────────────────────────────────────────
 export async function finalizeReport(client: Client, userId: string, cycleId: number, pending: any, isLate: boolean): Promise<void> {
-  const cfg = await getConfig();
+  const cfg = await getReportConfig();
   const { score } = scoreReport(pending, cfg);
 
   await sql`
@@ -422,7 +422,7 @@ async function checkQualityFlag(client: Client, userId: string, score: number, t
 
 // ─── SCHEDULER CHECK ──────────────────────────────────────────────────────────
 export async function checkWeeklyReportSchedule(client: Client): Promise<void> {
-  const cfg = await getConfig();
+  const cfg = await getReportConfig();
   const now = new Date();
   const nowDay  = now.getUTCDay();
   const nowHour = now.getUTCHours();
@@ -495,7 +495,7 @@ async function recordMiss(client: Client, userId: string, cycleId: number): Prom
   `;
 
   const miss = (await sql`SELECT * FROM weekly_report_misses WHERE user_id = ${userId}`)[0];
-  const cfg  = await getConfig();
+  const cfg  = await getReportConfig();
 
   if (miss.consecutive_misses >= cfg.miss_threshold) {
     // Stat flag

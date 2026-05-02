@@ -117,7 +117,7 @@ export async function finalizeAssessment(client: Client, userId: string, session
   const s = sessionRows[0];
 
   const responses = await sql`
-    SELECT r.*, q.correct_answer, q.keywords, q.is_scripting, q.post_id
+    SELECT r.*, q.correct_answer, q.correct_reason, q.is_scripting, q.post_id
     FROM assessment_responses r JOIN assessment_questions q ON r.question_id = q.id
     WHERE r.session_id = ${sessionId} ORDER BY r.answered_at ASC
   `;
@@ -180,7 +180,7 @@ export function buildReviewEmbed(
     const ok = (r.override_correct !== null && r.override_correct !== undefined) ? r.override_correct : r.is_correct;
     const lines = [`**Answer:** ${r.action}  |  **Correct:** ${r.correct_answer}`];
     if (r.reason) lines.push(`**Reason:** ${r.reason}`);
-    if (r.keywords) lines.push(`**Expected:** ${r.keywords}`);
+    if (r.correct_reason) lines.push(`**Expected:** ${r.correct_reason}`);
     embed.addFields({
       name: `Q${qNum}: \`${r.post_id}\`${r.is_scripting ? ' [Scripting]' : ''} ${ok ? '✅' : '❌'}`,
       value: lines.join('\n'),
@@ -278,8 +278,13 @@ export async function sendRetakeRequest(client: Client, userId: string, assessme
 
   try {
     const ch = await client.channels.fetch(config.channels.appeals) as TextChannel;
-    if (!ch) { console.error(`Appeals channel not found: ${config.channels.appeals}`); return; }
+    if (!ch) {
+      console.error(`[RETAKE] Appeals channel not found: ${config.channels.appeals}`);
+      return;
+    }
     await ch.send({ content: `<@&${config.roles.HPA}>`, embeds: [embed], components: [row] });
-    console.log(`Retake request sent: channel=${config.channels.appeals} user=${userId}`);
-  } catch (e) { console.error('Failed to send retake request:', e); }
+    console.log(`[RETAKE] Sent to channel=${config.channels.appeals} user=${userId} req=${reqId}`);
+  } catch (e) {
+    console.error(`[RETAKE] Failed to send retake request for user=${userId} req=${reqId}:`, e);
+  }
 }

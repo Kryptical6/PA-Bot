@@ -1,4 +1,4 @@
-import { Client, TextChannel } from 'discord.js';
+import { Client, TextChannel, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { sql } from '../database/client';
 import { config } from '../config';
 import { safeDM } from './dmService';
@@ -41,7 +41,6 @@ export async function checkEscalation(client: Client, userId: string): Promise<v
 
     // Notify HPA to optionally send an explanation DM
     try {
-      const { TextChannel, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder } = await import('discord.js');
       const ch = await client.channels.fetch(config.channels.hpaReview) as TextChannel;
       const embed = new EmbedBuilder()
         .setColor(Colors.Red)
@@ -52,7 +51,7 @@ export async function checkEscalation(client: Client, userId: string): Promise<v
         .setCustomId(`escalation_dm:${userId}`)
         .setLabel('📨 Send Explanation DM')
         .setStyle(ButtonStyle.Primary);
-      await ch.send({ embeds: [embed], components: [new ActionRowBuilder<typeof btn>().addComponents(btn)] });
+      await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(btn)] });
     } catch { /* silent */ }
 
     await updateLogTracker(client);

@@ -13,7 +13,9 @@ export async function updateLogTracker(client: Client): Promise<void> {
 
     await channel.guild.members.fetch();
     const staffMembers = Array.from(channel.guild.members.cache.values()).filter(m =>
-      (m.roles.cache.has(config.roles.PA) || m.roles.cache.has(config.roles.SPA)) && !m.user.bot
+      (m.roles.cache.has(config.roles.PA) || m.roles.cache.has(config.roles.SPA)) &&
+      !m.roles.cache.has(config.roles.HPA) &&
+      !m.user.bot
     );
 
     const rows = await sql`
