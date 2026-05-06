@@ -30,7 +30,7 @@ export async function updateLogTracker(client: Client): Promise<void> {
     const entries = staffMembers
       .map(m => ({ member: m, ...(logMap.get(m.id) ?? { mistakes: 0, strikes: 0 }) }))
       .sort((a, b) => (b.mistakes + b.strikes) - (a.mistakes + a.strikes) || a.member.displayName.localeCompare(b.member.displayName))
-      .map(e => `<@${e.member.id}>\n⚠️ **${e.mistakes}** mistake(s)  •  ❌ **${e.strikes}** strike(s)`);
+      .map(e => `<@${e.member.id}>\nStrikes: ${e.strikes}\nMistakes: ${e.mistakes}`);
 
     if (entries.length === 0) entries.push('No staff found.');
 
@@ -41,7 +41,7 @@ export async function updateLogTracker(client: Client): Promise<void> {
     const embeds = chunks.map((chunk, i) =>
       new EmbedBuilder()
         .setColor(Colors.Blue)
-        .setTitle(chunks.length > 1 ? `📋 Staff Log Tracker (${i + 1}/${chunks.length})` : '📋 Staff Log Tracker')
+        .setTitle(chunks.length > 1 ? `Staff Log Tracker (${i + 1}/${chunks.length})` : 'Staff Log Tracker')
         .setDescription(chunk.join('\n\n'))
         .setFooter({ text: `${staffMembers.length} staff members` })
         .setTimestamp()
@@ -70,7 +70,7 @@ async function syncMessages(client: Client, channel: TextChannel, embeds: EmbedB
 
   const recent = await channel.messages.fetch({ limit: 50 });
   const ours = Array.from(recent.values())
-    .filter(m => m.author.id === client.user?.id && m.embeds[0]?.title?.startsWith('📋 Staff Log Tracker'))
+    .filter(m => m.author.id === client.user?.id && m.embeds[0]?.title?.startsWith('Staff Log Tracker'))
     .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
   trackerMessageIds = [];

@@ -135,6 +135,9 @@ async function handleButton(i: any): Promise<void> {
   const escalationActions = ['esc_claim', 'esc_withdraw', 'esc_handle', 'esc_reject', 'esc_escalate_hpa'];
   if (escalationActions.includes(action)) { await handleEscalationButton(i, action, rest); return; }
 
+  // Warning read receipt
+  if (action === 'warn_read') { await handleWarnRead(i, rest); return; }
+
   // Feedback buttons
   if (action === 'fb_start' || action === 'fb_confirm' || action === 'fb_edit') { await handleFeedbackButton(i, action, rest); return; }
 
@@ -143,7 +146,7 @@ async function handleButton(i: any): Promise<void> {
   if (suggestionActions.includes(action)) { await handleSuggestionButton(i, action, rest); return; }
 
   // Audit buttons
-  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior', 'audit_ignore_underperform'];
+  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior', 'audit_ignore_underperform', 'audit_accept_cant'];
   if (auditActions.includes(action)) { await handleAuditButton(i, action, rest); return; }
 
   // Weekly report buttons
@@ -243,6 +246,7 @@ async function handleButton(i: any): Promise<void> {
       await checkEscalation(i.client, pending.user_id);
       await sendMilestoneDM(i.client, pending.user_id);
     }
+    await checkStrikeAlert(i.client, pending.user_id);
     // Track in SPA audit daily log
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -740,6 +744,13 @@ async function handleAuditButton(i: any, action: string, rest: string[]): Promis
     await i.reply({ content: `✅ Can't Do flag cleared for <@${targetId}>.`, ephemeral: true });
   }
 
+  else if (action === 'audit_accept_cant') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+    const targetId = rest[0];
+    await i.update({ content: `Accepted — Can't Do from <@${targetId}> noted and accepted.`, components: [] });
+  }
+
   else if (action === 'audit_ignore_underperform') {
     const m = i.member as GuildMember;
     if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
@@ -877,6 +888,26 @@ async function handleGameNightButton(i: any): Promise<void> {
 }
 
 // ─── SELECT HANDLER ───────────────────────────────────────────────────────────
+// ─── WARN READ RECEIPT ────────────────────────────────────────────────────────
+async function handleWarnRead(i: any, rest: string[]): Promise<void> {
+  const receiptId = parseInt(rest[0]);
+  const rows = await sql`SELECT * FROM warning_read_receipts WHERE id = ${receiptId}`;
+  if (rows.length === 0) { await i.update({ content: 'This warning has already been acknowledged.', components: [] }); return; }
+  const receipt = rows[0];
+
+  if (receipt.read_at) { await i.update({ content: 'You have already acknowledged this warning.', components: [] }); return; }
+  if (receipt.warned_user_id !== i.user.id) { await i.reply({ content: 'This warning is not for you.', ephemeral: true }); return; }
+
+  await sql`UPDATE warning_read_receipts SET read_at = NOW() WHERE id = ${receiptId}`;
+  await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Acknowledged').setDescription('You have confirmed you have read this warning.').setTimestamp()], components: [] });
+
+  // DM the person who sent the warning
+  try {
+    const sender = await i.client.users.fetch(receipt.warned_by);
+    await sender.send({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Warning Acknowledged').setDescription(`<@${receipt.warned_user_id}> has read and acknowledged your warning.\n\n**Reason:** ${receipt.reason}`).setTimestamp()] });
+  } catch { /* silent */ }
+}
+
 // ─── FEEDBACK BUTTONS ─────────────────────────────────────────────────────────
 async function handleFeedbackButton(i: any, action: string, rest: string[]): Promise<void> {
   const roundId = parseInt(rest[0]);
@@ -1159,11 +1190,30 @@ async function handleModal(i: any): Promise<void> {
     const targetId = rest[0];
     const reason   = i.fields.getTextInputValue('reason').trim();
 
+    const [receipt] = await sql`
+      INSERT INTO warning_read_receipts (warned_user_id, warned_by, reason)
+      VALUES (${targetId}, ${i.user.id}, ${reason})
+      RETURNING id
+    `;
+
+    const warnEmbed = new EmbedBuilder()
+      .setColor(Colors.Orange)
+      .setTitle('Formal Warning')
+      .setDescription(`You have received a formal warning from the staff team.\n\n**Reason:** ${reason}`)
+      .setFooter({ text: 'Please click the button below to acknowledge you have read this warning.' })
+      .setTimestamp();
+
+    const readBtn = new ButtonBuilder()
+      .setCustomId(`warn_read:${receipt.id}`)
+      .setLabel('Mark as Read')
+      .setStyle(ButtonStyle.Success);
+
     try {
       const user = await i.client.users.fetch(targetId);
-      await user.send({ embeds: [warningEmbed('Formal Warning', `You have received a formal warning from the staff team.\n\n**Reason:** ${reason}`)] });
-      await i.editReply({ embeds: [successEmbed('Warning Sent', `Warning DM sent to <@${targetId}>.`)] });
+      await user.send({ embeds: [warnEmbed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(readBtn)] });
+      await i.editReply({ embeds: [successEmbed('Warning Sent', `Warning DM sent to <@${targetId}>. You will be notified if they do not acknowledge within 24 hours.`)] });
     } catch {
+      await sql`DELETE FROM warning_read_receipts WHERE id = ${receipt.id}`;
       await i.editReply({ embeds: [errorEmbed(`Failed to DM <@${targetId}>. They may have DMs disabled.`)] });
     }
     return;
@@ -1634,7 +1684,8 @@ async function handleModal(i: any): Promise<void> {
     const flagStatus = await sql`SELECT * FROM spa_cant_do_flags WHERE user_id = ${userId}`;
     const isFlagged  = flagStatus[0]?.flagged ?? false;
 
-    const flagBtn = new ButtonBuilder().setCustomId(`audit_flag_senior:${userId}`).setLabel('🚩 Flag Senior').setStyle(ButtonStyle.Danger);
+    const flagBtn     = new ButtonBuilder().setCustomId(`audit_flag_senior:${userId}`).setLabel('Flag Senior').setStyle(ButtonStyle.Danger);
+    const acceptedBtn = new ButtonBuilder().setCustomId(`audit_accept_cant:${userId}`).setLabel('Accepted').setStyle(ButtonStyle.Success);
     const noteEmbed = new EmbedBuilder()
       .setColor(Colors.Orange)
       .setTitle(`❌ Can't Do — <@${userId}>`)
@@ -1645,7 +1696,7 @@ async function handleModal(i: any): Promise<void> {
     try {
       const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
       const content = isFlagged ? `<@&${config.roles.HPA}> ⚠️ Flagged senior submitted Can't Do:` : `<@&${config.roles.HPA}> Senior Can't Do response:`;
-      await ch.send({ content, embeds: [noteEmbed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(flagBtn)] });
+      await ch.send({ content, embeds: [noteEmbed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(acceptedBtn, flagBtn)] });
     } catch { /* silent */ }
   }
 
@@ -1827,6 +1878,25 @@ async function showNextTagsOrModal(i: any, cycleId: number, currentSection: stri
 
     await i.editReply({ content: '', embeds: [preview], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(confirmBtn, editBtn)] }).catch(() => {});
   }
+}
+
+async function checkStrikeAlert(client: any, userId: string): Promise<void> {
+  try {
+    const rows = await sql`
+      SELECT
+        COUNT(*) FILTER (WHERE type = 'strike') AS strikes
+      FROM logs WHERE user_id = ${userId} AND expires_at > NOW()
+    `;
+    const strikes = parseInt(rows[0].strikes) || 0;
+    if (strikes !== 2 && strikes !== 3) return;
+
+    const ch = await client.channels.fetch(config.channels.appeals) as TextChannel;
+    if (strikes === 2) {
+      await ch.send({ content: `<@&${config.roles.HPA}> Warning: <@${userId}> is now at **2 strikes** and is approaching 3.` });
+    } else if (strikes === 3) {
+      await ch.send({ content: `<@&${config.roles.HPA}> <@${userId}> has reached **3 strikes**.` });
+    }
+  } catch { /* silent */ }
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────

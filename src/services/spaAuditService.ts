@@ -81,25 +81,25 @@ export async function buildQuotaEmbed(targetUserId: string, requesterId: string,
 
   const embed = new EmbedBuilder()
     .setColor(statFlags.length > 0 || bhvFlags.length > 0 ? Colors.Orange : Colors.Blue)
-    .setTitle(`📊 SPA Quota — <@${targetUserId}>`)
+    .setTitle(`SPA Quota — <@${targetUserId}>`)
     .setTimestamp();
 
   // Today
-  embed.addFields({ name: '📅 Today', value:
+  embed.addFields({ name: 'Today', value:
     `Submitted: **${todaySub}** | Approved: **${todayApp}** | Denied: **${todayDen}**\n` +
     `Accuracy: **${pct(todayApp, todaySub)}** | Target: **${targetStr}**\n` +
     `Status: ${todayLog?.done_clicked ? (todayLog?.underperformed ? '⚠️ Done (Underperformed)' : '✅ Done') : todayLog?.cant_do ? '❌ Can\'t Do' : '🕐 Pending'}`,
   });
 
   // 7 day
-  embed.addFields({ name: '📆 Last 7 Days', value:
+  embed.addFields({ name: 'Last 7 Days', value:
     `Submitted: **${weekSubmitted}** | Approved: **${weekApproved}** | Denied: **${weekDenied}**\n` +
     `Accuracy: **${pct(weekApproved, weekSubmitted)}** | Active Days: **${activeDays}/7**`,
   });
 
   // All time (only show to HPA or self)
   if (isHPA || targetUserId === requesterId) {
-    embed.addFields({ name: '📈 All Time', value:
+    embed.addFields({ name: 'All Time', value:
       `Submitted: **${allSub}** | Approved: **${allApp}** | Denied: **${allDen}**\n` +
       `Overall Accuracy: **${pct(allApp, allSub)}**`,
     });
@@ -109,15 +109,15 @@ export async function buildQuotaEmbed(targetUserId: string, requesterId: string,
   const lastDoneStr = lastDone.length > 0
     ? `<t:${Math.floor(new Date(lastDone[0].log_date).getTime() / 1000)}:D>`
     : 'Never';
-  embed.addFields({ name: '🕐 Last Active', value: lastDoneStr, inline: true });
+  embed.addFields({ name: 'Last Active', value: lastDoneStr, inline: true });
 
   // Flags (only show to HPA)
   if (isHPA) {
     if (statFlags.length > 0) {
-      embed.addFields({ name: '🚨 Stat Flags', value: statFlags.map((f: any) => `• ${f.flag_type.replace('_', ' ')}: ${f.details ?? ''}`).join('\n') });
+      embed.addFields({ name: 'Stat Flags', value: statFlags.map((f: any) => `• ${f.flag_type.replace('_', ' ')}: ${f.details ?? ''}`).join('\n') });
     }
     if (bhvFlags.length > 0) {
-      embed.addFields({ name: '⚠️ Behaviour Flags', value: bhvFlags.map((f: any) => `• ${f.flag_type}${f.note ? `: ${f.note}` : ''}`).join('\n') });
+      embed.addFields({ name: 'Behaviour Flags', value: bhvFlags.map((f: any) => `• ${f.flag_type}${f.note ? `: ${f.note}` : ''}`).join('\n') });
     }
   }
 
@@ -136,7 +136,7 @@ export async function buildAuditReport(client: Client, targetUserId: string, req
     days.push(d);
   }
 
-  const logs7 = await sql`SELECT * FROM spa_daily_logs WHERE user_id = ${targetUserId} AND log_date = ANY(${days}::date[])`;
+  const logs7 = await sql`SELECT * FROM spa_daily_logs WHERE user_id = ${targetUserId} AND log_date::text = ANY(${days})`;
   const logMap = new Map(logs7.map((l: any) => [l.log_date.toISOString?.().split('T')[0] ?? l.log_date, l]));
 
   // Prior 7 days for % change
@@ -144,7 +144,7 @@ export async function buildAuditReport(client: Client, targetUserId: string, req
   for (let i = 13; i >= 7; i--) {
     days7to14.push(new Date(now.getTime() - i * 86400000).toISOString().split('T')[0]);
   }
-  const priorLogs = await sql`SELECT * FROM spa_daily_logs WHERE user_id = ${targetUserId} AND log_date = ANY(${days7to14}::date[])`;
+  const priorLogs = await sql`SELECT * FROM spa_daily_logs WHERE user_id = ${targetUserId} AND log_date::text = ANY(${days7to14})`;
   const priorAcc  = priorLogs.reduce((a: number, l: any) => a + (l.approved || 0), 0);
   const priorSub  = priorLogs.reduce((a: number, l: any) => a + (l.submitted || 0), 0);
   const priorAccPct = priorSub > 0 ? Math.round((priorAcc / priorSub) * 100) : 0;
@@ -183,14 +183,14 @@ export async function buildAuditReport(client: Client, targetUserId: string, req
   // Main embed
   const mainEmbed = new EmbedBuilder()
     .setColor(statFlags.length > 0 || bhvFlags.length > 0 ? Colors.Orange : Colors.Green)
-    .setTitle(`🔍 SPA Audit — <@${targetUserId}>`)
+    .setTitle(`SPA Audit — <@${targetUserId}>`)
     .setDescription(`**Soft Target:** ${cfg.soft_target} logs/day | **Reminder:** ${cfg.reminder_hour}:00 UTC`)
     .addFields(
-      { name: '📊 7-Day Accuracy', value: `${currAccPct}% (${accChange >= 0 ? '📈' : '📉'} ${accChangeStr} vs prior week)`, inline: true },
-      { name: '📅 Active Days', value: `${activeDays}/7`, inline: true },
-      { name: '🕐 Last Active', value: lastDoneStr, inline: true },
-      { name: '📉 Below-Target Streak', value: belowStreak > 0 ? `**${belowStreak}** day(s)` : 'None', inline: true },
-      { name: '🚨 Flagged (Can\'t Do)', value: cantDoFlag[0]?.flagged ? '🚩 Yes' : 'No', inline: true },
+      { name: '7-Day Accuracy', value: `${currAccPct}% (${accChange >= 0 ? '📈' : '📉'} ${accChangeStr} vs prior week)`, inline: true },
+      { name: 'Active Days', value: `${activeDays}/7`, inline: true },
+      { name: 'Last Active', value: lastDoneStr, inline: true },
+      { name: 'Below-Target Streak', value: belowStreak > 0 ? `**${belowStreak}** day(s)` : 'None', inline: true },
+      { name: 'Flagged (Can\'t Do)', value: cantDoFlag[0]?.flagged ? '🚩 Yes' : 'No', inline: true },
     )
     .setTimestamp()
     .setFooter({ text: `Audit report for ${targetUserId} | Requested by ${requesterId}` });
@@ -198,14 +198,14 @@ export async function buildAuditReport(client: Client, targetUserId: string, req
   // Day breakdown embed
   const trendEmbed = new EmbedBuilder()
     .setColor(Colors.Blue)
-    .setTitle('📆 Last 7 Days Breakdown')
+    .setTitle('Last 7 Days Breakdown')
     .setDescription(dayBreakdown)
     .addFields({ name: 'Legend', value: '✅ Hit target | 🔸 Done (below target) | ⚠️ Underperformed | ❌ Can\'t Do | 🔴 Inactive | ⬜ No data' });
 
   // Stat flags embed
   const flagsEmbed = new EmbedBuilder()
     .setColor(Colors.Orange)
-    .setTitle('🚨 Flags & Behaviour');
+    .setTitle('Flags & Behaviour');
 
   if (statFlags.length === 0 && bhvFlags.length === 0) {
     flagsEmbed.setDescription('No active flags.');
@@ -251,6 +251,11 @@ async function getBelowTargetStreak(userId: string, target: number): Promise<num
 export async function sendDailyReminders(client: Client): Promise<void> {
   const nowHour = new Date().getUTCHours();
 
+  // At midnight UTC, reset reminder_person and reminder_channel for all seniors
+  if (nowHour === 0) {
+    await sql`UPDATE spa_audit_config SET reminder_person = NULL, reminder_channel = NULL`.catch(() => {});
+  }
+
   // Get all seniors
   try {
     const guild = (client as any).guilds.cache.first();
@@ -279,7 +284,7 @@ export async function sendDailyReminders(client: Client): Promise<void> {
 
       const embed = new EmbedBuilder()
         .setColor(Colors.Blue)
-        .setTitle('📋 Daily Log Reminder')
+        .setTitle('Daily Log Reminder')
         .setDescription(`Hey ${member.displayName}! It's time for your daily post review session.\n\n${descLine}`)
         .addFields({ name: 'Daily Target', value: `${cfg.soft_target} logs` })
         .setTimestamp();
@@ -372,7 +377,7 @@ async function promptFlagExpiry(client: Client, flag: any): Promise<void> {
     const ch = await client.channels.fetch(AUDIT_CHANNEL) as TextChannel;
     const embed = new EmbedBuilder()
       .setColor(Colors.Yellow)
-      .setTitle('⏰ Behaviour Flag Expiring')
+      .setTitle('Behaviour Flag Expiring')
       .setDescription(`The following flag on <@${flag.user_id}> is expiring in 24 hours:`)
       .addFields(
         { name: 'Flag', value: flag.flag_type, inline: true },
