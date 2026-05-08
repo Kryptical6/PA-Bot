@@ -28,9 +28,9 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   // Dropdown of all SPA members
   await i.guild!.members.fetch();
-  const seniors = Array.from(i.guild!.members.cache.values()).filter(m =>
+  const seniors = Array.from(i.guild!.members.cache.values()).filter((m: any) =>
     m.roles.cache.has(config.roles.SPA) && !m.roles.cache.has(config.roles.HPA) && !m.user.bot
-  );
+  ) as any[];
 
   if (seniors.length === 0) {
     await i.editReply({ embeds: [errorEmbed('No senior staff found.')] });

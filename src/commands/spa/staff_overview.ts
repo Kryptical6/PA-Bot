@@ -25,7 +25,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     const sort = sel.values[0];
 
     await i.guild!.members.fetch();
-    const staff = Array.from(i.guild!.members.cache.values()).filter(m => (m.roles.cache.has(config.roles.PA) || m.roles.cache.has(config.roles.SPA)) && !m.user.bot);
+    const staff = Array.from(i.guild!.members.cache.values()).filter((m: any) => (m.roles.cache.has(config.roles.PA) || m.roles.cache.has(config.roles.SPA)) && !m.user.bot);
     const [rateRow] = await sql`SELECT rate FROM escalation_config WHERE id = 1`;
     const rate = rateRow?.rate ?? config.escalation.defaultRate;
 

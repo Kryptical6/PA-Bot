@@ -12,7 +12,7 @@ export async function updateLogTracker(client: Client): Promise<void> {
     if (!channel) return;
 
     await channel.guild.members.fetch();
-    const staffMembers = Array.from(channel.guild.members.cache.values()).filter(m =>
+    const staffMembers = Array.from(channel.guild.members.cache.values()).filter((m: any) =>
       (m.roles.cache.has(config.roles.PA) || m.roles.cache.has(config.roles.SPA)) &&
       !m.roles.cache.has(config.roles.HPA) &&
       !m.user.bot
@@ -28,9 +28,9 @@ export async function updateLogTracker(client: Client): Promise<void> {
     const logMap = new Map(rows.map((r: any) => [r.user_id, { mistakes: parseInt(r.mistakes), strikes: parseInt(r.strikes) }]));
 
     const entries = staffMembers
-      .map(m => ({ member: m, ...(logMap.get(m.id) ?? { mistakes: 0, strikes: 0 }) }))
-      .sort((a, b) => (b.mistakes + b.strikes) - (a.mistakes + a.strikes) || a.member.displayName.localeCompare(b.member.displayName))
-      .map(e => `<@${e.member.id}>\nStrikes: ${e.strikes}\nMistakes: ${e.mistakes}`);
+      .map((m: any) => ({ member: m, ...((logMap.get(m.id) ?? { mistakes: 0, strikes: 0 }) as { mistakes: number; strikes: number }) }))
+      .sort((a: any, b: any) => (b.mistakes + b.strikes) - (a.mistakes + a.strikes) || a.member.displayName.localeCompare(b.member.displayName))
+      .map((e: any) => `<@${e.member.id}>\nStrikes: ${e.strikes}\nMistakes: ${e.mistakes}`);
 
     if (entries.length === 0) entries.push('No staff found.');
 
@@ -70,8 +70,8 @@ async function syncMessages(client: Client, channel: TextChannel, embeds: EmbedB
 
   const recent = await channel.messages.fetch({ limit: 50 });
   const ours = Array.from(recent.values())
-    .filter(m => m.author.id === client.user?.id && m.embeds[0]?.title?.startsWith('Staff Log Tracker'))
-    .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+    .filter((m: any) => m.author.id === client.user?.id && m.embeds[0]?.title?.startsWith('Staff Log Tracker'))
+    .sort((a: any, b: any) => a.createdTimestamp - b.createdTimestamp);
 
   trackerMessageIds = [];
   if (ours.length > 0) {

@@ -34,9 +34,9 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   }
 
   await i.guild!.members.fetch();
-  const seniors = Array.from(i.guild!.members.cache.values()).filter(m =>
+  const seniors = Array.from(i.guild!.members.cache.values()).filter((m: any) =>
     m.roles.cache.has(config.roles.SPA) && !m.roles.cache.has(config.roles.HPA) && !m.user.bot
-  );
+  ) as any[];
 
   const submitted = await sql`SELECT * FROM weekly_reports WHERE cycle_id = ${cycle.id}`;
   const extensions = await sql`SELECT * FROM weekly_report_extensions WHERE cycle_id = ${cycle.id}`;
