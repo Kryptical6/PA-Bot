@@ -9,6 +9,7 @@ import { sendGameNightReminders } from '../services/gameNightService';
 import { checkFeedbackReminders } from '../services/feedbackService';
 import { sendDailyReminders, runAuditChecks } from '../services/spaAuditService';
 import { checkWeeklyReportSchedule } from '../services/weeklyReportService';
+import { checkExpiredSessions } from '../services/logSessionService';
 
 async function runAll(client: Client): Promise<void> {
   try {
@@ -23,6 +24,7 @@ async function runAll(client: Client): Promise<void> {
     await runAuditChecks(client);
     await checkWeeklyReportSchedule(client);
     await checkUnreadWarnings(client);
+    await checkExpiredSessions(client);
   } catch (e) { console.error('Scheduler error:', e); }
 }
 

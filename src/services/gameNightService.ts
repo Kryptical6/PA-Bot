@@ -122,8 +122,25 @@ export async function sendGameNightReminders(client: Client): Promise<void> {
     await sql`UPDATE game_nights SET reminder_10_sent = true WHERE id = ${n.id}`;
   }
 
-  // Mark past events as completed
-  await sql`UPDATE game_nights SET status = 'completed' WHERE status = 'upcoming' AND scheduled_at < ${now.toISOString()}`;
+  // Mark past events as completed and send feedback requests
+  const nowCompleted = await sql`
+    UPDATE game_nights SET status = 'completed'
+    WHERE status = 'upcoming' AND scheduled_at < ${now.toISOString()}
+    RETURNING *
+  `;
+  for (const n of nowCompleted) {
+    await sendFeedbackRequests(client, n);
+  }
+
+  // Process feedback deadlines
+  const feedbackDeadlineNights = await sql`
+    SELECT * FROM game_nights WHERE status = 'completed' AND feedback_sent = true
+    AND feedback_deadline IS NOT NULL AND feedback_deadline <= NOW()
+    AND id NOT IN (SELECT DISTINCT game_night_id FROM game_night_feedback WHERE game_night_id = game_nights.id)
+  `.catch(() => []);
+  for (const n of feedbackDeadlineNights) {
+    await postFeedbackSummary(client, n.id);
+  }
 }
 
 async function sendReminders(client: Client, night: any, minutesBefore: number): Promise<void> {
@@ -143,4 +160,52 @@ async function sendReminders(client: Client, night: any, minutesBefore: number):
   for (const r of rsvps) {
     await dmUser(client, r.user_id, { embeds: [embed] });
   }
+}
+
+// ─── POST-EVENT FEEDBACK ──────────────────────────────────────────────────────
+export async function sendFeedbackRequests(client: Client, night: any): Promise<void> {
+  const deadline = new Date(Date.now() + 48 * 3600000);
+  await sql`UPDATE game_nights SET feedback_sent = true, feedback_deadline = ${deadline.toISOString()} WHERE id = ${night.id}`;
+
+  const rsvps = await sql`SELECT user_id FROM game_night_rsvps WHERE game_night_id = ${night.id} AND attending = true`;
+  const embed = new EmbedBuilder()
+    .setColor(Colors.Purple)
+    .setTitle(`How was ${night.title}?`)
+    .setDescription('We hope you had a great time! Please rate the game night.')
+    .setTimestamp();
+
+  const rateBtn = new ButtonBuilder()
+    .setCustomId(`gn_rate:${night.id}`)
+    .setLabel('Rate this Game Night')
+    .setStyle(ButtonStyle.Primary);
+
+  for (const r of rsvps) {
+    await dmUser(client, r.user_id, { embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(rateBtn)] });
+  }
+}
+
+export async function postFeedbackSummary(client: Client, nightId: number): Promise<void> {
+  const nights   = await sql`SELECT * FROM game_nights WHERE id = ${nightId}`;
+  const feedback = await sql`SELECT * FROM game_night_feedback WHERE game_night_id = ${nightId}`;
+  if (feedback.length === 0) return;
+
+  const avg = (feedback.reduce((a: number, f: any) => a + f.rating, 0) / feedback.length).toFixed(1);
+  const stars = (r: number) => '★'.repeat(r) + '☆'.repeat(5 - r);
+
+  const embed = new EmbedBuilder()
+    .setColor(Colors.Purple)
+    .setTitle(`Feedback — ${nights[0]?.title ?? 'Game Night'}`)
+    .addFields(
+      { name: 'Responses', value: String(feedback.length), inline: true },
+      { name: 'Average Rating', value: `${avg}/5`, inline: true },
+    )
+    .setTimestamp();
+
+  const comments = feedback.filter((f: any) => f.comment).map((f: any) => `${stars(f.rating)} — ${f.comment.slice(0, 200)}`);
+  if (comments.length > 0) embed.addFields({ name: 'Comments', value: comments.slice(0, 5).join('\n') });
+
+  try {
+    const ch = await client.channels.fetch(config.channels.appeals) as TextChannel;
+    await ch.send({ embeds: [embed] });
+  } catch (e) { console.error('Failed to post feedback summary:', e); }
 }

@@ -121,6 +121,25 @@ export async function buildQuotaEmbed(targetUserId: string, requesterId: string,
     }
   }
 
+  // Escalation stats (SPA's own escalations they've handled)
+  const escStats = await sql`
+    SELECT
+      COUNT(*) as total_claimed,
+      COUNT(*) FILTER (WHERE status = 'handled') as handled,
+      COUNT(*) FILTER (WHERE status = 'rejected') as rejected,
+      AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/3600) FILTER (WHERE status IN ('handled','rejected')) as avg_hours
+    FROM post_escalations WHERE claimed_by = ${targetUserId}
+  `;
+  const esc = escStats[0];
+  const totalClaimed = parseInt(esc?.total_claimed) || 0;
+
+  if (totalClaimed > 0 && (isHPA || targetUserId === requesterId)) {
+    const avgHrs = esc?.avg_hours ? `${parseFloat(esc.avg_hours).toFixed(1)}h` : 'N/A';
+    embed.addFields({ name: 'Escalations Handled', value:
+      `Claimed: **${totalClaimed}** | Handled: **${parseInt(esc?.handled) || 0}** | Rejected: **${parseInt(esc?.rejected) || 0}**\nAvg resolution time: **${avgHrs}**`
+    });
+  }
+
   return embed;
 }
 
@@ -289,10 +308,11 @@ export async function sendDailyReminders(client: Client): Promise<void> {
         .addFields({ name: 'Daily Target', value: `${cfg.soft_target} logs` })
         .setTimestamp();
 
-      const doneBtn   = new ButtonBuilder().setCustomId(`audit_done:${member.id}`).setLabel('✅ Done').setStyle(ButtonStyle.Success);
-      const cantBtn   = new ButtonBuilder().setCustomId(`audit_cant:${member.id}`).setLabel('❌ Can\'t Do').setStyle(ButtonStyle.Danger);
+      const startBtn  = new ButtonBuilder().setCustomId(`audit_start_session:${member.id}`).setLabel('Start').setStyle(ButtonStyle.Success);
+      const cantBtn   = new ButtonBuilder().setCustomId(`audit_cant:${member.id}`).setLabel("Can't Do").setStyle(ButtonStyle.Danger);
 
-      await dmUser(client, member.id, { embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(doneBtn, cantBtn)] });
+      const msg = await dmUser(client, member.id, { embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(startBtn, cantBtn)] });
+      // msg is now a Message object we can use for session tracking
     }
   } catch (e) { console.error('Failed to send daily reminders:', e); }
 }

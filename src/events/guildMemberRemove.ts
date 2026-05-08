@@ -10,6 +10,16 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
     await sql`DELETE FROM appeals WHERE user_id = ${member.id}`;
     await sql`DELETE FROM escalation_warnings WHERE user_id = ${member.id}`;
     await sql`DELETE FROM assessment_sessions WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM retake_requests WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM spa_audit_config WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM spa_daily_logs WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM spa_behaviour_flags WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM spa_stat_flags WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM spa_cant_do_flags WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM weekly_report_pending WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM weekly_report_misses WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM feedback_pending WHERE user_id = ${member.id}`;
+    await sql`DELETE FROM suggestions WHERE submitted_by = ${member.id} AND status = 'pending'`;
     if (logs.length > 0) console.log(`Cleaned up ${logs.length} log(s) for departed member ${member.id}`);
   } catch (e) {
     console.error(`Cleanup failed for ${member.id}:`, e);

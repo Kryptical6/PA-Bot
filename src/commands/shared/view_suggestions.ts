@@ -3,7 +3,7 @@ import { isPA } from '../../utils/permissions';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('view_suggestions')
+  .setName('game_suggestions')
   .setDescription('View approved game suggestions sorted by upvotes');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

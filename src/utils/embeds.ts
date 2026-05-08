@@ -21,19 +21,23 @@ export const notifyEmbed = (type: 'warning' | 'info' | 'reminder', message: stri
   return new EmbedBuilder().setColor(map[type].color).setTitle(map[type].title).setDescription(message).setTimestamp();
 };
 
-export const pendingLogEmbed = (d: { userId: string; postId: string; reason: string; loggedBy: string; date: string; pendingId: number }) =>
-  new EmbedBuilder()
-    .setColor(Colors.Yellow)
-    .setTitle('📋 Pending Log Review')
+export const pendingLogEmbed = (d: { userId: string; postId: string; reason: string; loggedBy: string; date: string; pendingId: number; severity?: string }) => {
+  const severityColors: Record<string, number> = { minor: Colors.Yellow, moderate: Colors.Orange, severe: Colors.Red };
+  const color = severityColors[d.severity ?? 'minor'] ?? Colors.Yellow;
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle('Pending Log Review')
     .addFields(
       { name: 'Target',     value: `<@${d.userId}>`,   inline: true },
       { name: 'Logged By',  value: `<@${d.loggedBy}>`, inline: true },
+      { name: 'Severity',   value: (d.severity ?? 'minor').charAt(0).toUpperCase() + (d.severity ?? 'minor').slice(1), inline: true },
       { name: 'Post ID',    value: d.postId,            inline: true },
       { name: 'Date',       value: d.date,              inline: true },
       { name: 'Reason',     value: d.reason },
     )
     .setFooter({ text: `Pending ID: ${d.pendingId}` })
     .setTimestamp();
+};
 
 export const appealEmbed = (d: { userId: string; logId: number; reason: string; logType: string; logReason: string; appealId: number }) =>
   new EmbedBuilder()

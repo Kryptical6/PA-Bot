@@ -13,7 +13,7 @@ export const ACTION_LABELS: Record<string, string> = {
 
 export function buildEscalationEmbed(e: any): EmbedBuilder {
   const statusMap: Record<string, { color: number; label: string }> = {
-    pending:       { color: Colors.Yellow, label: '🕐 Pending - awaiting claim' },
+    pending:       { color: Colors.Yellow, label: '🕐 Pending — awaiting claim' },
     claimed:       { color: Colors.Blue,   label: `🙋 Claimed by <@${e.claimed_by}>` },
     handled:       { color: Colors.Green,  label: '✅ Handled' },
     rejected:      { color: Colors.Red,    label: '❌ Rejected' },
@@ -48,9 +48,10 @@ export function buildPendingRow(escalationId: number): ActionRowBuilder<ButtonBu
 
 export function buildClaimedRow(escalationId: number): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`esc_handle:${escalationId}`).setLabel('✅ Handled').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`esc_reject:${escalationId}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`esc_escalate_hpa:${escalationId}`).setLabel('⬆️ Escalate to HPA').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`esc_handle:${escalationId}`).setLabel('Handled').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`esc_add_note:${escalationId}`).setLabel('Add Note').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`esc_reject:${escalationId}`).setLabel('Reject').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`esc_escalate_hpa:${escalationId}`).setLabel('Escalate to HPA').setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -72,7 +73,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       new StringSelectMenuOptionBuilder().setLabel('🔍 Review my post').setDescription('Ask a senior to review my post').setValue('review_post'),
       new StringSelectMenuOptionBuilder().setLabel('🔰 Revoke a Skill Role').setDescription('Request removal of a skill role').setValue('revoke_skill_role'),
       new StringSelectMenuOptionBuilder().setLabel('🔄 Take-over this post').setDescription('Ask a senior to take over handling a post').setValue('takeover_post'),
-      new StringSelectMenuOptionBuilder().setLabel('⚖️ Punishment Request').setDescription('Rquest a punishment request for Scripts/Code').setValue('punishment_request'),
+      new StringSelectMenuOptionBuilder().setLabel('⚖️ Punishment Request').setDescription('Code/Scripts Only — pings HPA directly').setValue('punishment_request'),
     );
 
   await i.reply({

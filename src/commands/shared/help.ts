@@ -18,7 +18,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   if (isSPA(m)) embed.addFields({ name: '🔹 SPA', value: [
     '`/log_mistake` `/staff_profile` `/staff_overview`',
-    '`/lookup_post` `/warn_user` `/create_vote` `/spa_quota`',
+    '`/lookup_post` `/warn_user` `/create_vote` `/spa_quota` `/set_reminder`',
     '`/list_assessments`',
     '`/create_tag` `/edit_tag` `/delete_tag`',
     '`/create_embed` `/edit_embed`',

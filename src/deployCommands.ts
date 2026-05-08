@@ -11,10 +11,7 @@ import { data as tagSearch }        from './commands/shared/tag_search';
 import { data as paAssessment }     from './commands/shared/pa_assessment';
 import { data as escalate }         from './commands/shared/escalate';
 import { data as myEscalations }    from './commands/shared/my_escalations';
-import { data as suggestGame }      from './commands/shared/suggest_game';
-import { data as viewSuggestions }  from './commands/shared/view_suggestions';
 import { data as suggest }          from './commands/shared/suggest';
-import { data as spaQuota }         from './commands/spa/spa_quota';
 
 // SPA
 import { data as logMistake }       from './commands/spa/log_mistake';
@@ -32,50 +29,56 @@ import { data as editEmbed }        from './commands/spa/edit_embed';
 import { data as editGameNight }    from './commands/spa/edit_game_night';
 import { data as viewEscalations }  from './commands/spa/view_escalations';
 import { data as searchSuggestions } from './commands/spa/search_suggestions';
+import { data as spaQuota }         from './commands/spa/spa_quota';
+import { data as setReminder }       from './commands/spa/set_reminder';
 
 // HPA
-import { data as forceStrike }          from './commands/hpa/force_strike';
-import { data as manageLog }            from './commands/hpa/manage_log';
-import { data as setEscalation }        from './commands/hpa/set_escalation';
-import { data as recalcEscalation }     from './commands/hpa/recalculate_escalation';
-import { data as notifyUser }           from './commands/hpa/notify_user';
-import { data as bulkActions }          from './commands/hpa/bulk_actions';
-import { data as manageLogTracker }     from './commands/hpa/manage_log_tracker';
-import { data as createAssessment }     from './commands/hpa/create_assessment';
-import { data as createAssessmentQ }    from './commands/hpa/create_assessment_question';
-import { data as editAssessmentQ }      from './commands/hpa/edit_assessment_question';
-import { data as deleteAssessmentQ }    from './commands/hpa/delete_assessment_question';
-import { data as publishAssessment }    from './commands/hpa/publish_assessment';
-import { data as restrictAssessment }   from './commands/hpa/restrict_assessment';
-import { data as viewResults }          from './commands/hpa/view_assessment_results';
-import { data as viewSessions }         from './commands/hpa/view_active_sessions';
-import { data as createGameNight }      from './commands/hpa/create_game_night';
-import { data as cancelGameNight }      from './commands/hpa/cancel_game_night';
-import { data as deleteSuggestion }     from './commands/hpa/delete_suggestion';
-import { data as clearStale }           from './commands/hpa/clear_stale';
-import { data as createFeedback }       from './commands/hpa/create_feedback';
-import { data as closeFeedback }        from './commands/hpa/close_feedback';
-import { data as viewSpaAudit }         from './commands/hpa/view_spa_audit';
-import { data as configureAudit }       from './commands/hpa/configure_audit';
-import { data as clearSpaFlag }         from './commands/hpa/clear_spa_flag';
-import { data as setupWeeklyReport }    from './commands/hpa/setup_weekly_report';
-import { data as triggerWeeklyReport }  from './commands/hpa/trigger_weekly_report';
-import { data as viewReportStatus }     from './commands/hpa/view_report_status';
+import { data as forceStrike }              from './commands/hpa/force_strike';
+import { data as manageLog }                from './commands/hpa/manage_log';
+import { data as setEscalation }            from './commands/hpa/set_escalation';
+import { data as recalcEscalation }         from './commands/hpa/recalculate_escalation';
+import { data as notifyUser }               from './commands/hpa/notify_user';
+import { data as bulkActions }              from './commands/hpa/bulk_actions';
+import { data as manageLogTracker }         from './commands/hpa/manage_log_tracker';
+import { data as clearStale }               from './commands/hpa/clear_stale';
+import { data as createAssessment }         from './commands/hpa/create_assessment';
+import { data as createAssessmentQ }        from './commands/hpa/create_assessment_question';
+import { data as editAssessmentQ }          from './commands/hpa/edit_assessment_question';
+import { data as deleteAssessmentQ }        from './commands/hpa/delete_assessment_question';
+import { data as publishAssessment }        from './commands/hpa/publish_assessment';
+import { data as restrictAssessment }       from './commands/hpa/restrict_assessment';
+import { data as viewResults }              from './commands/hpa/view_assessment_results';
+import { data as viewSessions }             from './commands/hpa/view_active_sessions';
+import { data as importAssessmentQuestions } from './commands/hpa/import_assessment_questions';
+import { data as createGameNight }          from './commands/hpa/create_game_night';
+import { data as cancelGameNight }          from './commands/hpa/cancel_game_night';
+import { data as deleteSuggestion }         from './commands/hpa/delete_suggestion';
+import { data as createFeedback }           from './commands/hpa/create_feedback';
+import { data as closeFeedback }            from './commands/hpa/close_feedback';
+import { data as viewSpaAudit }             from './commands/hpa/view_spa_audit';
+import { data as configureAudit }           from './commands/hpa/configure_audit';
+import { data as clearSpaFlag }             from './commands/hpa/clear_spa_flag';
+import { data as setupWeeklyReport }        from './commands/hpa/setup_weekly_report';
+import { data as triggerWeeklyReport }      from './commands/hpa/trigger_weekly_report';
+import { data as viewReportStatus }         from './commands/hpa/view_report_status';
 
 const commands = [
   // Shared
   help, myLogs, appeal, tag, tagSearch, paAssessment,
-  escalate, myEscalations, suggestGame, viewSuggestions,
-  suggest, spaQuota,
+  escalate, myEscalations, suggest,
   // SPA
-  logMistake, staffProfile, staffOverview, lookupPost, warnUser, createVote,
-  listAssessments, createTag, editTag, deleteTag, createEmbed, editEmbed,
+  logMistake, staffProfile, staffOverview, lookupPost, warnUser,
+  createVote, listAssessments, spaQuota, setReminder,
+  createTag, editTag, deleteTag,
+  createEmbed, editEmbed,
   editGameNight, viewEscalations, searchSuggestions,
   // HPA
-  forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser, bulkActions,
-  manageLogTracker, createAssessment, createAssessmentQ, editAssessmentQ,
-  deleteAssessmentQ, publishAssessment, restrictAssessment, viewResults, viewSessions,
-  createGameNight, cancelGameNight, deleteSuggestion, clearStale,
+  forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser,
+  bulkActions, manageLogTracker, clearStale,
+  createAssessment, createAssessmentQ, editAssessmentQ, deleteAssessmentQ,
+  publishAssessment, restrictAssessment, viewResults, viewSessions,
+  importAssessmentQuestions,
+  createGameNight, cancelGameNight, deleteSuggestion,
   createFeedback, closeFeedback,
   viewSpaAudit, configureAudit, clearSpaFlag,
   setupWeeklyReport, triggerWeeklyReport, viewReportStatus,
@@ -85,12 +88,12 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN!);
 
 (async () => {
   try {
-    console.log('Deploying slash commands...');
+    console.log(`Deploying ${commands.length} slash commands...`);
     await rest.put(
       Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID!, process.env.DISCORD_GUILD_ID!),
       { body: commands }
     );
-    console.log(`✅ ${commands.length} commands deployed successfully.`);
+    console.log(`✅ ${commands.length} commands deployed.`);
   } catch (e) {
     console.error('Deploy failed:', e);
   }

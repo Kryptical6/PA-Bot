@@ -33,8 +33,8 @@ import * as escalate from '../commands/shared/escalate';
 import * as myEscalations from '../commands/shared/my_escalations';
 import * as viewEscalations from '../commands/spa/view_escalations';
 import { buildEscalationEmbed, buildPendingRow, buildClaimedRow } from '../commands/shared/escalate';
-import * as suggestGame from '../commands/shared/suggest_game';
-import * as viewSuggestions from '../commands/shared/view_suggestions';
+import * as setReminder from '../commands/spa/set_reminder';
+import * as importAssessmentQ from '../commands/hpa/import_assessment_questions';
 import * as createGameNight from '../commands/hpa/create_game_night';
 import * as setupWeeklyReport from '../commands/hpa/setup_weekly_report';
 import * as triggerWeeklyReport from '../commands/hpa/trigger_weekly_report';
@@ -51,6 +51,7 @@ import * as searchSuggestions from '../commands/spa/search_suggestions';
 import { buildFeedbackEmbed, buildFeedbackRow, buildResponseEmbed, buildSubmittedEmbed } from '../services/feedbackService';
 import { buildSuggestionEmbed, buildPendingSuggestionRow, buildConsideredRow } from '../commands/shared/suggest';
 import { getOrCreateDailyLog, getConfig, BEHAVIOUR_FLAGS } from '../services/spaAuditService';
+import { startLogSession, updateSessionDM, closeSession, postSessionSummary, buildSessionEmbed, buildSessionButtons } from '../services/logSessionService';
 import * as cancelGameNight from '../commands/hpa/cancel_game_night';
 import * as deleteSuggestion from '../commands/hpa/delete_suggestion';
 import * as clearStale from '../commands/hpa/clear_stale';
@@ -77,7 +78,9 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   lookup_post: lookupPost, warn_user: warnUser, create_vote: createVote,
   list_assessments: listAssessments, create_tag: createTag, edit_tag: editTag, delete_tag: deleteTag,
   create_embed: createEmbed, edit_embed: editEmbed,
-  game_suggest: suggestGame, game_suggestions: viewSuggestions,
+  suggest, search_suggestions: searchSuggestions,
+  set_reminder: setReminder,
+  import_assessment_questions: importAssessmentQ,
   escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,
   create_game_night: createGameNight, cancel_game_night: cancelGameNight,
@@ -87,7 +90,6 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   view_report_status: viewReportStatus,
   spa_quota: spaQuota, view_spa_audit: viewSpaAudit,
   configure_audit: configureAudit, clear_spa_flag: clearSpaFlag,
-  dept_suggest: suggest, dept_suggestions: searchSuggestions,
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
   manage_log_tracker: manageLogTracker, create_assessment: createAssessment,
@@ -128,11 +130,11 @@ async function handleButton(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
   // Game night buttons
-  const gameNightActions = ['gs_approve', 'gs_deny', 'gs_upvote', 'gn_rsvp', 'gn_list'];
+  const gameNightActions = ['gs_approve', 'gs_deny', 'gs_upvote', 'gn_rsvp', 'gn_list', 'gn_rate'];
   if (gameNightActions.includes(action)) { await handleGameNightButton(i); return; }
 
   // Escalation buttons
-  const escalationActions = ['esc_claim', 'esc_withdraw', 'esc_handle', 'esc_reject', 'esc_escalate_hpa'];
+  const escalationActions = ['esc_claim', 'esc_withdraw', 'esc_handle', 'esc_reject', 'esc_escalate_hpa', 'esc_add_note', 'esc_show_notes'];
   if (escalationActions.includes(action)) { await handleEscalationButton(i, action, rest); return; }
 
   // Warning read receipt
@@ -146,7 +148,7 @@ async function handleButton(i: any): Promise<void> {
   if (suggestionActions.includes(action)) { await handleSuggestionButton(i, action, rest); return; }
 
   // Audit buttons
-  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior', 'audit_ignore_underperform', 'audit_accept_cant'];
+  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior', 'audit_ignore_underperform', 'audit_accept_cant', 'audit_start_session', 'session_done'];
   if (auditActions.includes(action)) { await handleAuditButton(i, action, rest); return; }
 
   // Weekly report buttons
@@ -251,6 +253,8 @@ async function handleButton(i: any): Promise<void> {
     try {
       const today = new Date().toISOString().split('T')[0];
       await sql`INSERT INTO spa_daily_logs (user_id, log_date, submitted, approved) VALUES (${pending.logged_by}, ${today}, 1, 1) ON CONFLICT (user_id, log_date) DO UPDATE SET submitted = spa_daily_logs.submitted + 1, approved = spa_daily_logs.approved + 1`;
+      // Update live session DM if active
+      await updateSessionDM(i.client, pending.logged_by).catch(() => {});
     } catch { /* silent */ }
     await updateLogTracker(i.client);
     await i.update({ content: `✅ Logged as **${type}**.`, components: [] });
@@ -652,13 +656,77 @@ async function handleEscalationButton(i: any, action: string, rest: string[]): P
     );
 
     await i.message.edit({ content: `<@&${config.roles.HPA}> This escalation has been escalated to HPA.`, embeds: [buildEscalationEmbed(updated)], components: [hpaRow] });
-    await i.reply({ content: '⬆️ Escalated to HPA.', ephemeral: true });
+    await i.reply({ content: 'Escalated to HPA.', ephemeral: true });
+  }
+
+  else if (action === 'esc_add_note') {
+    const m = i.member as GuildMember;
+    if (!isSPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    await i.showModal({
+      customId: `esc_note_modal:${escalationId}`,
+      title: 'Add Internal Note',
+      components: [{ type: 1, components: [{ type: 4, customId: 'note', label: 'Note', style: 2, required: true, minLength: 5, maxLength: 1000 }] }]
+    });
+  }
+
+  else if (action === 'esc_show_notes') {
+    const notes = await sql`SELECT * FROM escalation_notes WHERE escalation_id = ${escalationId} ORDER BY created_at ASC`;
+    if (notes.length === 0) { await i.reply({ content: 'No notes on this escalation.', ephemeral: true }); return; }
+    const text = notes.map((n: any) => `<@${n.added_by}> — <t:${Math.floor(new Date(n.created_at).getTime() / 1000)}:R>\n${n.note}`).join('\n\n');
+    await i.reply({ content: `**Internal Notes:**\n\n${text.slice(0, 1900)}`, ephemeral: true });
   }
 }
 
 // ─── AUDIT BUTTONS ────────────────────────────────────────────────────────────
 async function handleAuditButton(i: any, action: string, rest: string[]): Promise<void> {
-  if (action === 'audit_done') {
+  if (action === 'audit_start_session') {
+    const userId = rest[0];
+    if (i.user.id !== userId) { await i.reply({ content: 'This reminder is not for you.', ephemeral: true }); return; }
+
+    const today = new Date().toISOString().split('T')[0];
+    const alreadyDone = await sql`SELECT 1 FROM spa_daily_logs WHERE user_id = ${userId} AND log_date = ${today} AND done_clicked = true`;
+    if (alreadyDone.length > 0) { await i.update({ content: 'You have already completed a session today.', components: [] }); return; }
+
+    const cfg = await getConfig(userId);
+    const dayLog = await getOrCreateDailyLog(userId, today);
+    const logsToday = (dayLog?.submitted || 0) + (dayLog?.approved || 0) + (dayLog?.denied || 0);
+
+    // Update the message to show active session
+    await i.update({
+      embeds: [buildSessionEmbed(userId, logsToday, cfg, 'active')],
+      components: [buildSessionButtons(userId)],
+    });
+
+    // Record session start using the DM message details
+    const dmMsg = i.message;
+    await startLogSession(i.client, userId, dmMsg.channelId, dmMsg.id);
+  }
+
+  else if (action === 'session_done') {
+    const userId = rest[0];
+    if (i.user.id !== userId) { await i.reply({ content: 'This session is not yours.', ephemeral: true }); return; }
+
+    const sessions = await sql`SELECT * FROM spa_log_sessions WHERE user_id = ${userId} AND status = 'active'`;
+    if (sessions.length === 0) { await i.reply({ content: 'No active session found.', ephemeral: true }); return; }
+
+    // Step 1: show review type dropdown
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`session_review_type:${sessions[0].id}`)
+      .setPlaceholder('How did you review posts today?')
+      .addOptions(
+        new StringSelectMenuOptionBuilder().setLabel('Sections / Categories').setDescription('Reviewed specific channel categories').setValue('sections'),
+        new StringSelectMenuOptionBuilder().setLabel('Individual PAs').setDescription('Focused on specific post approvers').setValue('individuals'),
+        new StringSelectMenuOptionBuilder().setLabel('Mix').setDescription('Both sections and individual PAs').setValue('mix'),
+      );
+
+    await i.reply({
+      content: 'How did you review posts today?',
+      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+      ephemeral: true,
+    });
+  }
+
+  else if (action === 'audit_done') {
     const userId = rest[0];
     if (i.user.id !== userId) { await i.reply({ content: 'This reminder is not for you.', ephemeral: true }); return; }
 
@@ -876,14 +944,29 @@ async function handleGameNightButton(i: any): Promise<void> {
 
     const embed = new EmbedBuilder()
       .setColor(Colors.Purple)
-      .setTitle('👥 RSVP List')
+      .setTitle('RSVP List')
       .addFields(
-        { name: `✅ Attending (${attending.length})`,     value: attending.length > 0 ? attending.join('\n') : 'None', inline: true },
-        { name: `❌ Not Attending (${notAttending.length})`, value: notAttending.length > 0 ? notAttending.join('\n') : 'None', inline: true },
+        { name: `Attending (${attending.length})`,     value: attending.length > 0 ? attending.join('\n') : 'None', inline: true },
+        { name: `Not Attending (${notAttending.length})`, value: notAttending.length > 0 ? notAttending.join('\n') : 'None', inline: true },
       )
       .setTimestamp();
 
     await i.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  else if (action === 'gn_rate') {
+    const nightId = parseInt(rest[0]);
+    const existing = await sql`SELECT 1 FROM game_night_feedback WHERE game_night_id = ${nightId} AND user_id = ${i.user.id}`;
+    if (existing.length > 0) { await i.reply({ content: 'You have already rated this game night.', ephemeral: true }); return; }
+
+    await i.showModal({
+      customId: `gn_rate_modal:${nightId}`,
+      title: 'Rate the Game Night',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'rating', label: 'Rating (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'comment', label: 'Comment (optional)', style: 2, required: false, maxLength: 500 }] },
+      ]
+    });
   }
 }
 
@@ -1089,6 +1172,47 @@ async function handleSelect(i: any): Promise<void> {
     return;
   }
 
+  if (action === 'suggest_type_sel') {
+    const type = i.values[0];
+    if (type === 'department') {
+      // Check limit
+      const open = await sql`SELECT COUNT(*) as count FROM suggestions WHERE submitted_by = ${i.user.id} AND status IN ('pending','considered') AND suggestion_type = 'department'`;
+      if (parseInt(open[0].count) >= 2) { await i.reply({ embeds: [errorEmbed('You already have 2 open department suggestions.')], ephemeral: true }); return; }
+      await i.showModal({ customId: 'suggest_modal:department', title: 'Department Suggestion', components: [
+        { type: 1, components: [{ type: 4, customId: 'title', label: 'Title', style: 1, required: true, maxLength: 100 }] },
+        { type: 1, components: [{ type: 4, customId: 'core_idea', label: 'Core Idea', style: 2, required: true, minLength: 10, maxLength: 500 }] },
+        { type: 1, components: [{ type: 4, customId: 'further_details', label: 'Further Details (optional)', style: 2, required: false, maxLength: 1000 }] },
+      ]});
+    } else if (type === 'game_night') {
+      await i.showModal({ customId: 'suggest_modal:game_night', title: 'Game Night Suggestion', components: [
+        { type: 1, components: [{ type: 4, customId: 'title', label: 'Game Name', style: 1, required: true, maxLength: 100 }] },
+        { type: 1, components: [{ type: 4, customId: 'core_idea', label: 'Why should we play this?', style: 2, required: true, minLength: 5, maxLength: 500 }] },
+      ]});
+    } else if (type === 'tag') {
+      await i.showModal({ customId: 'suggest_modal:tag', title: 'Tag Suggestion', components: [
+        { type: 1, components: [{ type: 4, customId: 'title', label: 'Tag Name', style: 1, required: true, maxLength: 50 }] },
+        { type: 1, components: [{ type: 4, customId: 'core_idea', label: 'Category (Rules/Guides/Resources/Other)', style: 1, required: true, maxLength: 20 }] },
+        { type: 1, components: [{ type: 4, customId: 'further_details', label: 'Tag Content', style: 2, required: true, minLength: 5, maxLength: 1000 }] },
+      ]});
+    }
+    return;
+  }
+
+  if (action === 'session_review_type') {
+    const sessionId  = parseInt(rest[0]);
+    const reviewType = i.values[0];
+
+    // Modal step 1: posts reviewed count
+    await i.showModal({
+      customId: `session_count_modal:${sessionId}:${reviewType}`,
+      title: 'Session Summary — Step 1',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'posts_reviewed', label: 'Approx. how many posts did you review?', style: 1, required: true, maxLength: 6, placeholder: 'e.g. 50' }] },
+      ]
+    });
+    return;
+  }
+
   if (action === 'esc_action_select') {
     const selectedAction = i.values[0];
     const actionTitles: Record<string, string> = {
@@ -1153,9 +1277,89 @@ async function handleSelect(i: any): Promise<void> {
 async function handleModal(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
+  if (action === 'session_count_modal') {
+    const sessionId  = parseInt(rest[0]);
+    const reviewType = rest[1];
+    const postsRaw   = i.fields.getTextInputValue('posts_reviewed').trim();
+    const posts      = parseInt(postsRaw) || 0;
+
+    // Step 2: show items modal based on review type
+    const isIndividuals = reviewType === 'individuals';
+    const isMix         = reviewType === 'mix';
+
+    await i.showModal({
+      customId: `session_items_modal:${sessionId}:${reviewType}:${posts}`,
+      title: 'Session Summary — Step 2',
+      components: [
+        isIndividuals || isMix
+          ? { type: 1, components: [{ type: 4, customId: 'user_ids', label: 'User IDs reviewed (one per line)', style: 2, required: isIndividuals, maxLength: 2000, placeholder: '123456789012345678\n234567890123456789' }] }
+          : { type: 1, components: [{ type: 4, customId: 'channel_ids', label: 'Channel IDs reviewed (one per line)', style: 2, required: true, maxLength: 2000, placeholder: '123456789012345678\n234567890123456789' }] },
+        ...(!isIndividuals ? [{ type: 1, components: [{ type: 4, customId: 'channel_ids', label: 'Channel/Category IDs (one per line)', style: 2 as const, required: reviewType === 'sections', maxLength: 2000, placeholder: '123456789012345678' }] }] : []),
+      ].filter(Boolean).slice(0, 2) as any
+    });
+
+    return;
+  }
+
+  else if (action === 'session_items_modal') {
+    await i.deferReply({ ephemeral: true });
+    const sessionId  = parseInt(rest[0]);
+    const reviewType = rest[1];
+    const posts      = parseInt(rest[2]) || 0;
+
+    const sessions = await sql`SELECT * FROM spa_log_sessions WHERE id = ${sessionId} AND user_id = ${i.user.id}`;
+    if (sessions.length === 0) { await i.editReply({ embeds: [errorEmbed('Session not found.')] }); return; }
+
+    // Collect IDs from whichever fields were filled
+    const allIds: string[] = [];
+    try {
+      const userIds    = i.fields.getTextInputValue('user_ids').split('\n').map((s: string) => s.trim()).filter(Boolean);
+      allIds.push(...userIds);
+    } catch { /* field not present */ }
+    try {
+      const channelIds = i.fields.getTextInputValue('channel_ids').split('\n').map((s: string) => s.trim()).filter(Boolean);
+      allIds.push(...channelIds);
+    } catch { /* field not present */ }
+
+    // Close session and post summary
+    await sql`UPDATE spa_log_sessions SET status = 'completed', completed_at = NOW() WHERE id = ${sessionId}`;
+
+    const today  = new Date().toISOString().split('T')[0];
+    const dayLog = await sql`SELECT * FROM spa_daily_logs WHERE user_id = ${i.user.id} AND log_date = ${today}`;
+    const cfg    = await getConfig(i.user.id);
+
+    // Mark done_clicked
+    await sql`
+      INSERT INTO spa_daily_logs (user_id, log_date, done_clicked)
+      VALUES (${i.user.id}, ${today}, true)
+      ON CONFLICT (user_id, log_date) DO UPDATE SET done_clicked = true
+    `;
+
+    // Check underperform
+    const submitted = dayLog[0]?.submitted || 0;
+    const underperformThreshold = Math.floor((cfg.soft_target * (cfg.underperform_pct || 50)) / 100);
+    if (submitted < underperformThreshold) {
+      await sql`UPDATE spa_daily_logs SET underperformed = true WHERE user_id = ${i.user.id} AND log_date = ${today}`;
+      try {
+        const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
+        const ignoreBtn = new ButtonBuilder().setCustomId(`audit_ignore_underperform:${i.user.id}:${today}`).setLabel('Ignore Underperformance').setStyle(ButtonStyle.Secondary);
+        await ch.send({ content: `<@&${config.roles.HPA}> Underperformance Note — <@${i.user.id}> submitted **${submitted}** logs today (target: ${cfg.soft_target}, threshold: ${underperformThreshold}).`, components: [new ActionRowBuilder<ButtonBuilder>().addComponents(ignoreBtn)] });
+      } catch { /* silent */ }
+    }
+
+    await postSessionSummary(i.client, i.user.id, sessionId, reviewType, allIds, posts);
+
+    // Update the DM message
+    try { await updateSessionDM(i.client, i.user.id); } catch { /* silent */ }
+
+    await i.editReply({ embeds: [successEmbed('Session Submitted', `Your session summary has been submitted. ${submitted} log(s) recorded today.`)] });
+    return;
+  }
+
   if (action === 'log_mistake') {
     await i.deferReply({ ephemeral: true });
     const targetId = rest[0];
+    const severity = rest[1] ?? 'minor';
     const postId   = i.fields.getTextInputValue('post_id').trim();
     const date     = i.fields.getTextInputValue('date').trim();
     const reason   = i.fields.getTextInputValue('reason').trim();
@@ -1171,13 +1375,13 @@ async function handleModal(i: any): Promise<void> {
     const existing = await sql`SELECT 1 FROM used_post_ids WHERE post_id = ${postId}`;
     if (existing.length > 0) { await i.editReply({ embeds: [errorEmbed(`Post ID \`${postId}\` has already been logged.`)] }); return; }
 
-    const [result] = await sql`INSERT INTO pending_logs (user_id, post_id, reason, logged_by, date) VALUES (${targetId}, ${postId}, ${reason}, ${i.user.id}, ${date}) RETURNING id`;
+    const [result] = await sql`INSERT INTO pending_logs (user_id, post_id, reason, logged_by, date, severity) VALUES (${targetId}, ${postId}, ${reason}, ${i.user.id}, ${date}, ${severity}) RETURNING id`;
     await sql`INSERT INTO used_post_ids (post_id) VALUES (${postId}) ON CONFLICT DO NOTHING`;
 
-    const embed = pendingLogEmbed({ userId: targetId, postId, reason, loggedBy: i.user.id, date, pendingId: result.id });
-    const approve = new ButtonBuilder().setCustomId(`log_approve:${result.id}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success);
-    const editBtn = new ButtonBuilder().setCustomId(`log_edit:${result.id}`).setLabel('✏️ Edit Reason').setStyle(ButtonStyle.Primary);
-    const deny    = new ButtonBuilder().setCustomId(`log_deny:${result.id}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger);
+    const embed = pendingLogEmbed({ userId: targetId, postId, reason, loggedBy: i.user.id, date, pendingId: result.id, severity });
+    const approve = new ButtonBuilder().setCustomId(`log_approve:${result.id}`).setLabel('Approve').setStyle(ButtonStyle.Success);
+    const editBtn = new ButtonBuilder().setCustomId(`log_edit:${result.id}`).setLabel('Edit Reason').setStyle(ButtonStyle.Primary);
+    const deny    = new ButtonBuilder().setCustomId(`log_deny:${result.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger);
 
     const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
     await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, deny)] });
@@ -1305,6 +1509,7 @@ async function handleModal(i: any): Promise<void> {
     try {
       const today = new Date().toISOString().split('T')[0];
       await sql`INSERT INTO spa_daily_logs (user_id, log_date, submitted, denied) VALUES (${pending.logged_by}, ${today}, 1, 1) ON CONFLICT (user_id, log_date) DO UPDATE SET submitted = spa_daily_logs.submitted + 1, denied = spa_daily_logs.denied + 1`;
+      await updateSessionDM(i.client, pending.logged_by).catch(() => {});
     } catch { /* silent */ }
     await i.editReply({ embeds: [successEmbed('Denied', 'Log denied and logger notified.')] });
   }
@@ -1579,41 +1784,101 @@ async function handleModal(i: any): Promise<void> {
   // ─── SUGGESTION MODALS ────────────────────────────────────────────────────
   else if (action === 'suggest_modal') {
     await i.deferReply({ ephemeral: true });
+    const type       = rest[0] ?? 'department';
+    const title      = i.fields.getTextInputValue('title').trim();
+    const coreIdea   = i.fields.getTextInputValue('core_idea').trim();
+    const furtherRaw = (() => { try { return i.fields.getTextInputValue('further_details').trim() || null; } catch { return null; } })();
 
-    const title          = i.fields.getTextInputValue('title').trim();
-    const core_idea      = i.fields.getTextInputValue('core_idea').trim();
-    const further_details = i.fields.getTextInputValue('further_details').trim() || null;
-
-    // Duplicate detection
-    const similar = await sql`
-      SELECT id, title FROM suggestions
-      WHERE status NOT IN ('rejected','declined')
-      AND (title ILIKE ${'%' + title + '%'} OR core_idea ILIKE ${'%' + core_idea.slice(0, 30) + '%'})
-      LIMIT 3
-    `;
-
-    if (similar.length > 0) {
-      const list = similar.map((s: any) => `#${s.id} — ${s.title}`).join('\n');
-      await i.editReply({ embeds: [new EmbedBuilder().setColor(Colors.Yellow).setTitle('⚠️ Similar Suggestions Found').setDescription(`Your suggestion may be similar to existing ones:\n\n${list}\n\nIf yours is different, continue by running \`/suggest\` again and confirming.`).setTimestamp()] });
+    if (type === 'game_night') {
+      const existing = await sql`SELECT 1 FROM game_suggestions WHERE LOWER(game_name) = LOWER(${title}) AND status != 'denied'`;
+      if (existing.length > 0) { await i.editReply({ embeds: [errorEmbed(`**${title}** has already been suggested.`)] }); return; }
+      const [result] = await sql`INSERT INTO game_suggestions (suggested_by, game_name, description) VALUES (${i.user.id}, ${title}, ${coreIdea}) RETURNING id`;
+      const embed = new EmbedBuilder().setColor(Colors.Blue).setTitle('Game Suggestion')
+        .addFields({ name: 'Game', value: title, inline: true }, { name: 'Suggested by', value: `<@${i.user.id}>`, inline: true })
+        .setFooter({ text: `Suggestion ID: ${result.id}` }).setTimestamp();
+      if (coreIdea) embed.addFields({ name: 'Why?', value: coreIdea });
+      const approve = new ButtonBuilder().setCustomId(`gs_approve:${result.id}`).setLabel('Approve').setStyle(ButtonStyle.Success);
+      const deny    = new ButtonBuilder().setCustomId(`gs_deny:${result.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger);
+      const ch = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
+      const msg = await ch.send({ content: `<@&${config.roles.HPA}> New game suggestion`, embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, deny)] });
+      await sql`UPDATE game_suggestions SET message_id = ${msg.id} WHERE id = ${result.id}`;
+      await i.editReply({ embeds: [successEmbed('Submitted', `**${title}** submitted for HPA review.`)] });
       return;
     }
 
+    const similar = type === 'department' ? await sql`
+      SELECT id, title FROM suggestions WHERE status NOT IN ('rejected','declined') AND suggestion_type = 'department'
+      AND (title ILIKE ${'%' + title + '%'} OR core_idea ILIKE ${'%' + coreIdea.slice(0, 30) + '%'}) LIMIT 3
+    ` : [];
+
+    if (similar.length > 0) {
+      await i.editReply({ embeds: [new EmbedBuilder().setColor(Colors.Yellow).setTitle('Similar Suggestions Found').setDescription(`Similar suggestions exist:\n\n${similar.map((s: any) => `#${s.id} — ${s.title}`).join('\n')}\n\nIf yours is different, run \`/suggest\` again.`).setTimestamp()] });
+      return;
+    }
+
+    const tagCategory = type === 'tag' ? (['Rules','Guides','Resources','Other'].includes(coreIdea) ? coreIdea : 'Other') : null;
+    const tagContent  = type === 'tag' ? furtherRaw : null;
+    const finalIdea   = type === 'tag' ? `Tag suggestion: ${title}` : coreIdea;
+
     const [result] = await sql`
-      INSERT INTO suggestions (submitted_by, title, core_idea, further_details)
-      VALUES (${i.user.id}, ${title}, ${core_idea}, ${further_details})
+      INSERT INTO suggestions (submitted_by, title, core_idea, further_details, suggestion_type, tag_name, tag_category, tag_content)
+      VALUES (${i.user.id}, ${title}, ${finalIdea}, ${type !== 'tag' ? furtherRaw : null}, ${type}, ${type === 'tag' ? title : null}, ${tagCategory}, ${tagContent})
       RETURNING *
     `;
 
     const embed = buildSuggestionEmbed(result);
     const row   = buildPendingSuggestionRow(result.id);
+    const ch    = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
+    const msg   = await ch.send({ embeds: [embed], components: [row] });
+    await sql`UPDATE suggestions SET message_id = ${msg.id} WHERE id = ${result.id}`;
+    await i.editReply({ embeds: [successEmbed('Suggestion Submitted', `**${title}** (ID: #${result.id}) submitted.`)] });
+  }
 
+  else if (action === 'import_questions') {
+    await i.deferReply({ ephemeral: true });
+    const assessmentId = parseInt(rest[0]);
+    const isScripting  = rest[1] === 'true';
+    const csvData      = i.fields.getTextInputValue('csv_data').trim();
+    const lines        = csvData.split('\n').map((l: string) => l.trim()).filter(Boolean);
+    const VALID_ANS    = ['approve', 'deny', 'suspend', 'request_pof'];
+    let success = 0; const failures: string[] = [];
+    for (let idx = 0; idx < lines.length; idx++) {
+      const parts = lines[idx].split(',');
+      if (parts.length < 2) { failures.push(`Line ${idx + 1}: too few fields`); continue; }
+      const [postId, answer, reason, ...ctxParts] = parts.map((p: string) => p.trim());
+      const context = ctxParts.join(',').trim() || null;
+      if (!VALID_ANS.includes(answer.toLowerCase())) { failures.push(`Line ${idx + 1}: invalid answer '${answer}'`); continue; }
+      try {
+        await sql`INSERT INTO assessment_questions (assessment_id, post_id, correct_answer, correct_reason, context, is_scripting) VALUES (${assessmentId}, ${postId}, ${answer.toLowerCase()}, ${reason || null}, ${context}, ${isScripting})`;
+        success++;
+      } catch { failures.push(`Line ${idx + 1}: DB error`); }
+    }
+    await sql`INSERT INTO assessment_import_log (assessment_id, imported_by, total_lines, successful, failed) VALUES (${assessmentId}, ${i.user.id}, ${lines.length}, ${success}, ${failures.length})`.catch(() => {});
+    const embed = new EmbedBuilder().setColor(failures.length === 0 ? Colors.Green : Colors.Yellow).setTitle('Import Complete')
+      .addFields({ name: 'Imported', value: String(success), inline: true }, { name: 'Failed', value: String(failures.length), inline: true }, { name: 'Total', value: String(lines.length), inline: true }).setTimestamp();
+    if (failures.length > 0) embed.addFields({ name: 'Failures', value: failures.slice(0, 10).join('\n') });
+    await i.editReply({ embeds: [embed] });
+  }
+
+  else if (action === 'esc_note_modal') {
+    await i.deferReply({ ephemeral: true });
+    const escalationId = parseInt(rest[0]);
+    const note = i.fields.getTextInputValue('note').trim();
+    await sql`INSERT INTO escalation_notes (escalation_id, added_by, note) VALUES (${escalationId}, ${i.user.id}, ${note})`;
+
+    // Add Show Notes button to the message if not already there
     try {
-      const ch = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
-      const msg = await ch.send({ embeds: [embed], components: [row] });
-      await sql`UPDATE suggestions SET message_id = ${msg.id} WHERE id = ${result.id}`;
-    } catch (e) { console.error('Failed to post suggestion:', e); }
+      const btns = i.message?.components?.[0]?.components ?? [];
+      const hasNoteBtn = btns.some((b: any) => b.customId?.startsWith('esc_show_notes'));
+      if (!hasNoteBtn && i.message) {
+        const existing = i.message.components[0];
+        const showBtn  = new ButtonBuilder().setCustomId(`esc_show_notes:${escalationId}`).setLabel('Show Notes').setStyle(ButtonStyle.Secondary);
+        const newRow   = new ActionRowBuilder<ButtonBuilder>().addComponents(...existing.components.map((b: any) => ButtonBuilder.from(b as any)), showBtn);
+        await i.message.edit({ components: [newRow] });
+      }
+    } catch { /* silent */ }
 
-    await i.editReply({ embeds: [successEmbed('Suggestion Submitted', `Your suggestion **${title}** (ID: #${result.id}) has been submitted for review.`)] });
+    await i.editReply({ embeds: [successEmbed('Note Added', 'Your note has been saved to this escalation.')] });
   }
 
   else if (action === 'sug_reject_modal') {
@@ -1808,6 +2073,66 @@ async function handleModal(i: any): Promise<void> {
     await storeTags(i.user.id, cycleId, sectionKey, ['Other'], label);
     await i.deferUpdate().catch(() => {});
     await showNextTagsOrModal(i, cycleId, sectionKey);
+  }
+
+  // ─── TAG MODALS ────────────────────────────────────────────────────────────
+  else if (action === 'create_tag_modal') {
+    await i.deferReply({ ephemeral: true });
+    const category = rest[0] ?? 'Other';
+    const name     = i.fields.getTextInputValue('tag_name').trim().toLowerCase().replace(/\s+/g, '_');
+    const content  = i.fields.getTextInputValue('tag_content').trim();
+
+    const existing = await sql`SELECT 1 FROM tags WHERE name = ${name}`;
+    if (existing.length > 0) { await i.editReply({ embeds: [errorEmbed(`Tag **${name}** already exists.`)] }); return; }
+    const count = await sql`SELECT COUNT(*) as c FROM tags`;
+    if (parseInt(count[0].c) >= 30) { await i.editReply({ embeds: [errorEmbed('Tag limit of 30 reached.')] }); return; }
+
+    await sql`INSERT INTO tags (name, content, category, created_by) VALUES (${name}, ${content}, ${category}, ${i.user.id})`;
+    await i.editReply({ embeds: [successEmbed('Tag Created', `Tag **${name}** [${category}] created.`)] });
+  }
+
+  else if (action === 'edit_tag_modal') {
+    await i.deferReply({ ephemeral: true });
+    const tagId   = parseInt(rest[0]);
+    const content = i.fields.getTextInputValue('tag_content').trim();
+    const catRaw  = i.fields.getTextInputValue('category').trim();
+    const validCats = ['Rules', 'Guides', 'Resources', 'Other'];
+    const category  = validCats.find(c => c.toLowerCase() === catRaw.toLowerCase()) ?? 'Other';
+
+    await sql`UPDATE tags SET content = ${content}, category = ${category}, updated_by = ${i.user.id}, updated_at = NOW() WHERE id = ${tagId}`;
+    const [tag] = await sql`SELECT name FROM tags WHERE id = ${tagId}`;
+    await i.editReply({ embeds: [successEmbed('Tag Updated', `**${tag?.name}** updated.`)] });
+  }
+
+  // ─── GAME NIGHT RATE MODAL ─────────────────────────────────────────────────
+  else if (action === 'gn_rate_modal') {
+    await i.deferReply({ ephemeral: true });
+    const nightId  = parseInt(rest[0]);
+    const rating   = Math.min(5, Math.max(1, parseInt(i.fields.getTextInputValue('rating').trim()) || 3));
+    const comment  = i.fields.getTextInputValue('comment').trim() || null;
+
+    await sql`INSERT INTO game_night_feedback (game_night_id, user_id, rating, comment) VALUES (${nightId}, ${i.user.id}, ${rating}, ${comment}) ON CONFLICT DO NOTHING`;
+
+    // Check if all attendees rated
+    const rsvps    = await sql`SELECT user_id FROM game_night_rsvps WHERE game_night_id = ${nightId} AND attending = true`;
+    const feedback = await sql`SELECT user_id FROM game_night_feedback WHERE game_night_id = ${nightId}`;
+    const rsvpIds  = new Set(rsvps.map((r: any) => r.user_id));
+    const doneIds  = new Set(feedback.map((f: any) => f.user_id));
+    if ([...rsvpIds].every(id => doneIds.has(id))) {
+      const { postFeedbackSummary } = await import('../services/gameNightService');
+      await postFeedbackSummary(i.client, nightId).catch(() => {});
+    }
+
+    await i.editReply({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Thanks for the feedback!').setDescription(`You rated this game night **${rating}/5**.${comment ? `\n\nComment: ${comment}` : ''}`).setTimestamp()] });
+  }
+
+  // ─── ESC NOTE MODAL ────────────────────────────────────────────────────────
+  else if (action === 'esc_note_modal') {
+    await i.deferReply({ ephemeral: true });
+    const escalationId = parseInt(rest[0]);
+    const note = i.fields.getTextInputValue('note').trim();
+    await sql`INSERT INTO escalation_notes (escalation_id, added_by, note) VALUES (${escalationId}, ${i.user.id}, ${note})`;
+    await i.editReply({ embeds: [successEmbed('Note Added', 'Your note has been saved.')] });
   }
 }
 
