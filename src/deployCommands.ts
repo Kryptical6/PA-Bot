@@ -31,6 +31,7 @@ import { data as viewEscalations }  from './commands/spa/view_escalations';
 import { data as searchSuggestions } from './commands/spa/search_suggestions';
 import { data as spaQuota }         from './commands/spa/spa_quota';
 import { data as setReminder }       from './commands/spa/set_reminder';
+import { data as sendTag }           from './commands/spa/send_tag';
 
 // HPA
 import { data as forceStrike }              from './commands/hpa/force_strike';
@@ -68,7 +69,7 @@ const commands = [
   escalate, myEscalations, suggest,
   // SPA
   logMistake, staffProfile, staffOverview, lookupPost, warnUser,
-  createVote, listAssessments, spaQuota, setReminder,
+  createVote, listAssessments, spaQuota, setReminder, sendTag,
   createTag, editTag, deleteTag,
   createEmbed, editEmbed,
   editGameNight, viewEscalations, searchSuggestions,

@@ -34,6 +34,7 @@ import * as myEscalations from '../commands/shared/my_escalations';
 import * as viewEscalations from '../commands/spa/view_escalations';
 import { buildEscalationEmbed, buildPendingRow, buildClaimedRow } from '../commands/shared/escalate';
 import * as setReminder from '../commands/spa/set_reminder';
+import * as sendTag from '../commands/spa/send_tag';
 import * as importAssessmentQ from '../commands/hpa/import_assessment_questions';
 import * as createGameNight from '../commands/hpa/create_game_night';
 import * as setupWeeklyReport from '../commands/hpa/setup_weekly_report';
@@ -79,7 +80,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   list_assessments: listAssessments, create_tag: createTag, edit_tag: editTag, delete_tag: deleteTag,
   create_embed: createEmbed, edit_embed: editEmbed,
   suggest, search_suggestions: searchSuggestions,
-  set_reminder: setReminder,
+  set_reminder: setReminder, send_tag: sendTag,
   import_assessment_questions: importAssessmentQ,
   escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,

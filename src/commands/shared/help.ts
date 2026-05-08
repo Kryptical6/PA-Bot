@@ -20,7 +20,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     '`/log_mistake` `/staff_profile` `/staff_overview`',
     '`/lookup_post` `/warn_user` `/create_vote` `/spa_quota` `/set_reminder`',
     '`/list_assessments`',
-    '`/create_tag` `/edit_tag` `/delete_tag`',
+    '`/create_tag` `/edit_tag` `/delete_tag` `/send_tag`',
     '`/create_embed` `/edit_embed`',
     '`/edit_game_night` `/view_escalations` `/search_suggestions`',
   ].join('\n') });
