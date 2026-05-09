@@ -16,10 +16,13 @@ export async function getActiveStrikeCount(userId: string): Promise<number> {
 
 export async function syncStrikeRole(client: Client, userId: string, guildId: string): Promise<void> {
   try {
-    // Use cache first, fall back to fetch
     const guild = client.guilds.cache.get(guildId) ?? await client.guilds.fetch(guildId);
-    const member = guild.members.cache.get(userId) ?? await guild.members.fetch(userId).catch((e: any) => { console.error(`Failed to fetch member ${userId}:`, e); return null; });
-    if (!member) { console.error(`syncStrikeRole: member ${userId} not found in guild`); return; }
+    // Always force-fetch the member to avoid partial/stale cache
+    const member = await guild.members.fetch({ user: userId, force: true }).catch((e: any) => {
+      console.error(`Failed to fetch member ${userId}:`, e);
+      return null;
+    });
+    if (!member) { console.error(`syncStrikeRole: member ${userId} not found`); return; }
 
     const count = await getActiveStrikeCount(userId);
     console.log(`syncStrikeRole: user=${userId} activeStrikes=${count}`);
@@ -34,11 +37,12 @@ export async function syncStrikeRole(client: Client, userId: string, guildId: st
     // Add correct role for 1 or 2 strikes (3+ = no role, HPA flagged separately)
     if (count === 1 || count === 2) {
       const roleId = STRIKE_ROLE_IDS[count];
-      console.log(`syncStrikeRole: assigning role ${roleId} to ${userId}`);
-      await member.roles.add(roleId).catch((e: any) => console.error(`Failed to add role ${roleId} to ${userId}:`, e));
+      console.log(`syncStrikeRole: adding role ${roleId} to ${userId}`);
+      await member.roles.add(roleId).catch((e: any) => console.error(`Failed to add role ${roleId}:`, e));
+      console.log(`syncStrikeRole: done`);
     }
   } catch (e) {
-    console.error(`Failed to sync strike role for ${userId}:`, e);
+    console.error(`syncStrikeRole error for ${userId}:`, e);
   }
 }
 

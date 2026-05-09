@@ -2,6 +2,7 @@ import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, StringSe
 import { isHPA } from '../../utils/permissions';
 import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
+import { syncStrikeRole } from '../../services/strikeRoleService';
 
 export const data = new SlashCommandBuilder().setName('manage_log').setDescription('Edit, remove, or transfer a log (HPA only)')
   .addUserOption(o => o.setName('user').setDescription('Staff member').setRequired(true))
@@ -36,6 +37,10 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
     if (action === 'remove') {
       await sql`DELETE FROM logs WHERE id = ${logId}`;
+      // Sync strike role if it was a strike
+      if (log.type === 'strike') {
+        await syncStrikeRole(i.client, log.user_id, i.guild!.id).catch(() => {});
+      }
       await sel.update({ embeds: [successEmbed('Removed', `Log #${logId} deleted.`)], components: [] });
       return;
     }
@@ -73,6 +78,10 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       const type   = modal.fields.getTextInputValue('type').trim().toLowerCase();
       if (!['mistake', 'strike'].includes(type)) { await i.editReply({ embeds: [errorEmbed('Type must be "mistake" or "strike".')], components: [] }); return; }
       await sql`UPDATE logs SET reason = ${reason}, date = ${date}, type = ${type} WHERE id = ${logId}`;
+      // If type changed to/from strike, sync the role
+      if (type === 'strike' || log.type === 'strike') {
+        await syncStrikeRole(i.client, log.user_id, i.guild!.id).catch(() => {});
+      }
       await i.editReply({ content: '', embeds: [successEmbed('Edited', `Log #${logId} updated.\nReason: ${reason}\nDate: ${date}\nType: ${type}`)], components: [] });
     }
   });
