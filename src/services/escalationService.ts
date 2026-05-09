@@ -4,6 +4,7 @@ import { config } from '../config';
 import { safeDM } from './dmService';
 import { warningEmbed, infoEmbed } from '../utils/embeds';
 import { updateLogTracker } from './logTrackerService';
+import { syncStrikeRole } from './strikeRoleService';
 
 export async function checkEscalation(client: Client, userId: string): Promise<void> {
   const rateRow = await sql`SELECT rate FROM escalation_config WHERE id = 1`;
@@ -38,6 +39,12 @@ export async function checkEscalation(client: Client, userId: string): Promise<v
     await sql`INSERT INTO logs (user_id, type, reason, logged_by, expires_at) VALUES (${userId}, 'strike', 'Automatic escalation', 'system', ${exp.toISOString()})`;
 
     await safeDM(client, userId, warningEmbed('Strike Issued', 'You have received a strike.'), 'escalation strike');
+
+    // Silently sync strike role (no prompt possible from scheduler)
+    try {
+      const guild = (client as any).guilds?.cache?.first();
+      if (guild) await syncStrikeRole(client, userId, guild.id);
+    } catch { /* silent */ }
 
     // Notify HPA to optionally send an explanation DM
     try {

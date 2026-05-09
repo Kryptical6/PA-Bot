@@ -4,6 +4,7 @@ import { errorEmbed, successEmbed, warningEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 import { safeDM } from '../../services/dmService';
 import { updateLogTracker } from '../../services/logTrackerService';
+import { buildStrikeRolePrompt, getActiveStrikeCount } from '../../services/strikeRoleService';
 import { config } from '../../config';
 
 export const data = new SlashCommandBuilder().setName('force_strike').setDescription('Issue a strike directly (HPA only)')
@@ -39,5 +40,12 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   await safeDM(i.client, target.id, warningEmbed('Strike Issued', `You have received a strike.\n\n**Reason:** ${reason}\n**Date:** ${date}`), 'force strike');
   await updateLogTracker(i.client);
-  await modal.editReply({ embeds: [successEmbed('Strike Issued', `Strike issued to <@${target.id}>.`)] });
+
+  const strikeCount = await getActiveStrikeCount(target.id);
+  const prompt = buildStrikeRolePrompt(target.id, strikeCount);
+  if (prompt) {
+    await modal.editReply({ ...prompt });
+  } else {
+    await modal.editReply({ embeds: [successEmbed('Strike Issued', `Strike issued to <@${target.id}>.`)] });
+  }
 }

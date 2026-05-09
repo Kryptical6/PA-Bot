@@ -53,6 +53,7 @@ import { buildFeedbackEmbed, buildFeedbackRow, buildResponseEmbed, buildSubmitte
 import { buildSuggestionEmbed, buildPendingSuggestionRow, buildConsideredRow } from '../commands/shared/suggest';
 import { getOrCreateDailyLog, getConfig, BEHAVIOUR_FLAGS } from '../services/spaAuditService';
 import { startLogSession, updateSessionDM, closeSession, postSessionSummary, buildSessionEmbed, buildSessionButtons } from '../services/logSessionService';
+import { buildStrikeRolePrompt, syncStrikeRole, getActiveStrikeCount } from '../services/strikeRoleService';
 import * as cancelGameNight from '../commands/hpa/cancel_game_night';
 import * as deleteSuggestion from '../commands/hpa/delete_suggestion';
 import * as clearStale from '../commands/hpa/clear_stale';
@@ -151,6 +152,9 @@ async function handleButton(i: any): Promise<void> {
   // Audit buttons
   const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior', 'audit_ignore_underperform', 'audit_accept_cant', 'audit_start_session', 'session_done'];
   if (auditActions.includes(action)) { await handleAuditButton(i, action, rest); return; }
+
+  // Strike role buttons
+  if (action === 'strike_role_assign' || action === 'strike_role_skip') { await handleStrikeRoleButton(i, action, rest); return; }
 
   // Weekly report buttons
   const wrActions = ['wr_submit', 'wr_extend', 'wr_confirm', 'wr_edit', 'wr_modal2_trigger'];
@@ -259,6 +263,14 @@ async function handleButton(i: any): Promise<void> {
     } catch { /* silent */ }
     await updateLogTracker(i.client);
     await i.update({ content: `✅ Logged as **${type}**.`, components: [] });
+
+    if (type === 'strike') {
+      const strikeCount = await getActiveStrikeCount(pending.user_id);
+      const prompt = buildStrikeRolePrompt(pending.user_id, strikeCount);
+      if (prompt) {
+        await i.followUp({ ...prompt, ephemeral: true });
+      }
+    }
   }
 
   else if (action === 'log_deny') {
@@ -2203,6 +2215,41 @@ async function showNextTagsOrModal(i: any, cycleId: number, currentSection: stri
     const editBtn    = new ButtonBuilder().setCustomId(`wr_edit:${cycleId}`).setLabel('✏️ Edit').setStyle(ButtonStyle.Secondary);
 
     await i.editReply({ content: '', embeds: [preview], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(confirmBtn, editBtn)] }).catch(() => {});
+  }
+}
+
+// ─── STRIKE ROLE HANDLER ─────────────────────────────────────────────────────
+async function handleStrikeRoleButton(i: any, action: string, rest: string[]): Promise<void> {
+  const m = i.member as GuildMember;
+  if (!isHPA(m)) { await i.reply({ content: 'HPA only.', ephemeral: true }); return; }
+
+  const targetId    = rest[0];
+  const strikeCount = parseInt(rest[1] ?? '0');
+
+  if (action === 'strike_role_skip') {
+    await i.update({
+      embeds: [new EmbedBuilder().setColor(Colors.Grey).setTitle('No Role Assigned').setDescription(`No strike role assigned to <@${targetId}>.`).setTimestamp()],
+      components: [],
+    });
+    return;
+  }
+
+  try {
+    await syncStrikeRole(i.client, targetId, i.guild!.id);
+    const STRIKE_ROLE_IDS: Record<number, string> = {
+      1: '1372621584036134922',
+      2: '1372621626134233148',
+    };
+    const roleId = STRIKE_ROLE_IDS[strikeCount];
+    await i.update({
+      embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Role Assigned').setDescription(`<@&${roleId}> has been assigned to <@${targetId}>.`).setTimestamp()],
+      components: [],
+    });
+  } catch {
+    await i.update({
+      embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('Failed').setDescription('Could not assign role. Check bot permissions.').setTimestamp()],
+      components: [],
+    });
   }
 }
 

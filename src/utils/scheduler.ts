@@ -1,7 +1,7 @@
 import { Client, TextChannel, EmbedBuilder, Colors } from 'discord.js';
 import { sql } from '../database/client';
 import { config } from '../config';
-import { deleteExpiredLogs, deleteExpiredEscalationWarnings } from '../services/expiryService';
+import { deleteExpiredLogs, deleteExpiredEscalationWarnings, syncExpiredStrikeRoles } from '../services/expiryService';
 import { processExpiredVotes } from '../services/voteService';
 import { checkPendingLogReminders } from '../services/reminderService';
 import { cancelExpiredAssessmentSessions } from '../services/assessmentExpiryService';
@@ -14,6 +14,7 @@ import { checkExpiredSessions } from '../services/logSessionService';
 async function runAll(client: Client): Promise<void> {
   try {
     await deleteExpiredLogs();
+    await syncExpiredStrikeRoles(client);
     await deleteExpiredEscalationWarnings();
     await processExpiredVotes(client);
     await checkPendingLogReminders(client);
