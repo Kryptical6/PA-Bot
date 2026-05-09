@@ -42,14 +42,7 @@ import { data as notifyUser }               from './commands/hpa/notify_user';
 import { data as bulkActions }              from './commands/hpa/bulk_actions';
 import { data as manageLogTracker }         from './commands/hpa/manage_log_tracker';
 import { data as clearStale }               from './commands/hpa/clear_stale';
-import { data as createAssessment }         from './commands/hpa/create_assessment';
-import { data as createAssessmentQ }        from './commands/hpa/create_assessment_question';
-import { data as editAssessmentQ }          from './commands/hpa/edit_assessment_question';
-import { data as deleteAssessmentQ }        from './commands/hpa/delete_assessment_question';
-import { data as publishAssessment }        from './commands/hpa/publish_assessment';
-import { data as restrictAssessment }       from './commands/hpa/restrict_assessment';
-import { data as viewResults }              from './commands/hpa/view_assessment_results';
-import { data as viewSessions }             from './commands/hpa/view_active_sessions';
+import { data as assessment }               from './commands/hpa/assessment';
 import { data as importAssessmentQuestions } from './commands/hpa/import_assessment_questions';
 import { data as createGameNight }          from './commands/hpa/create_game_night';
 import { data as cancelGameNight }          from './commands/hpa/cancel_game_night';
@@ -76,9 +69,7 @@ const commands = [
   // HPA
   forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser,
   bulkActions, manageLogTracker, clearStale,
-  createAssessment, createAssessmentQ, editAssessmentQ, deleteAssessmentQ,
-  publishAssessment, restrictAssessment, viewResults, viewSessions,
-  importAssessmentQuestions,
+  assessment, importAssessmentQuestions,
   createGameNight, cancelGameNight, deleteSuggestion,
   createFeedback, closeFeedback,
   viewSpaAudit, configureAudit, clearSpaFlag,

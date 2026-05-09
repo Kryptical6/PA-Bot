@@ -65,14 +65,7 @@ import * as recalcEscalation from '../commands/hpa/recalculate_escalation';
 import * as notifyUser from '../commands/hpa/notify_user';
 import * as bulkActions from '../commands/hpa/bulk_actions';
 import * as manageLogTracker from '../commands/hpa/manage_log_tracker';
-import * as createAssessment from '../commands/hpa/create_assessment';
-import * as createAssessmentQ from '../commands/hpa/create_assessment_question';
-import * as editAssessmentQ from '../commands/hpa/edit_assessment_question';
-import * as deleteAssessmentQ from '../commands/hpa/delete_assessment_question';
-import * as publishAssessment from '../commands/hpa/publish_assessment';
-import * as restrictAssessment from '../commands/hpa/restrict_assessment';
-import * as viewResults from '../commands/hpa/view_assessment_results';
-import * as viewSessions from '../commands/hpa/view_active_sessions';
+import * as assessment from '../commands/hpa/assessment';
 
 const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Promise<void> }> = {
   help, my_logs: myLogs, appeal, tag, tag_search: tagSearch, pa_assessment: paAssessment,
@@ -94,11 +87,8 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   configure_audit: configureAudit, clear_spa_flag: clearSpaFlag,
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
-  manage_log_tracker: manageLogTracker, create_assessment: createAssessment,
-  create_assessment_question: createAssessmentQ, edit_assessment_question: editAssessmentQ,
-  delete_assessment_question: deleteAssessmentQ, publish_assessment: publishAssessment,
-  restrict_assessment: restrictAssessment, view_assessment_results: viewResults,
-  view_active_sessions: viewSessions,
+  manage_log_tracker: manageLogTracker,
+  assessment,
 };
 
 export async function handleInteraction(interaction: Interaction): Promise<void> {

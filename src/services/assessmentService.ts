@@ -279,12 +279,17 @@ export async function sendRetakeRequest(client: Client, userId: string, assessme
   try {
     const ch = await client.channels.fetch(config.channels.appeals) as TextChannel;
     if (!ch) {
-      console.error(`[RETAKE] Appeals channel not found: ${config.channels.appeals}`);
+      console.error(`[RETAKE] Channel not found: ${config.channels.appeals}`);
       return;
     }
-    await ch.send({ content: `<@&${config.roles.HPA}>`, embeds: [embed], components: [row] });
-    console.log(`[RETAKE] Sent to channel=${config.channels.appeals} user=${userId} req=${reqId}`);
+    const msg = await ch.send({
+      content: `<@&${config.roles.HPA}> New retake request`,
+      embeds: [embed],
+      components: [row],
+    });
+    await sql`UPDATE retake_requests SET message_id = ${msg.id} WHERE id = ${reqId}`;
+    console.log(`[RETAKE] Sent successfully to ${config.channels.appeals} msg=${msg.id}`);
   } catch (e) {
-    console.error(`[RETAKE] Failed to send retake request for user=${userId} req=${reqId}:`, e);
+    console.error(`[RETAKE] Failed to send:`, e);
   }
 }
