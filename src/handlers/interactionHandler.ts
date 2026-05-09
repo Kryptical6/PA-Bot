@@ -143,14 +143,14 @@ async function handleButton(i: any): Promise<void> {
   if (action === 'warn_read') { await handleWarnRead(i, rest); return; }
 
   // Feedback buttons
-  if (action === 'fb_start' || action === 'fb_confirm' || action === 'fb_edit') { await handleFeedbackButton(i, action, rest); return; }
+  if (action === 'fb_start' || action === 'fb_confirm' || action === 'fb_edit' || action === 'fb_rate_trigger') { await handleFeedbackButton(i, action, rest); return; }
 
   // Suggestion buttons
   const suggestionActions = ['sug_consider', 'sug_reject', 'sug_implement', 'sug_decline'];
   if (suggestionActions.includes(action)) { await handleSuggestionButton(i, action, rest); return; }
 
   // Audit buttons
-  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior', 'audit_ignore_underperform', 'audit_accept_cant', 'audit_start_session', 'session_done'];
+  const auditActions = ['audit_done', 'audit_cant', 'audit_add_flag', 'audit_clear_flag', 'audit_clear_cant', 'flag_keep', 'flag_expire', 'audit_flag_senior', 'audit_ignore_underperform', 'audit_accept_cant', 'audit_start_session', 'session_done', 'session_items_trigger'];
   if (auditActions.includes(action)) { await handleAuditButton(i, action, rest); return; }
 
   // Strike role buttons
@@ -739,6 +739,27 @@ async function handleAuditButton(i: any, action: string, rest: string[]): Promis
     });
   }
 
+  else if (action === 'session_items_trigger') {
+    const sessionId  = parseInt(rest[0]);
+    const reviewType = rest[1];
+    const posts      = parseInt(rest[2]) || 0;
+    const isIndividuals = reviewType === 'individuals';
+
+    const components: any[] = [];
+    if (isIndividuals || reviewType === 'mix') {
+      components.push({ type: 1, components: [{ type: 4, customId: 'user_ids', label: 'User IDs reviewed (one per line)', style: 2, required: isIndividuals, maxLength: 2000, placeholder: '123456789012345678\n234567890123456789' }] });
+    }
+    if (reviewType === 'sections' || reviewType === 'mix') {
+      components.push({ type: 1, components: [{ type: 4, customId: 'channel_ids', label: 'Channel/Category IDs (one per line)', style: 2, required: reviewType === 'sections', maxLength: 2000, placeholder: '123456789012345678' }] });
+    }
+
+    await i.showModal({
+      customId: `session_items_modal:${sessionId}:${reviewType}:${posts}`,
+      title: 'Session Summary — Step 2',
+      components: components.slice(0, 2),
+    });
+  }
+
   else if (action === 'audit_done') {
     const userId = rest[0];
     if (i.user.id !== userId) { await i.reply({ content: 'This reminder is not for you.', ephemeral: true }); return; }
@@ -1058,6 +1079,24 @@ async function handleFeedbackButton(i: any, action: string, rest: string[]): Pro
     await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('✅ Feedback Submitted').setDescription('Thank you! Your feedback has been submitted.').setTimestamp()], components: [] });
   }
 
+  else if (action === 'fb_rate_trigger') {
+    const roundId = parseInt(rest[0]);
+    const rounds = await sql`SELECT * FROM feedback_rounds WHERE id = ${roundId}`;
+    if (rounds.length === 0) { await i.reply({ embeds: [errorEmbed('Round not found.')], ephemeral: true }); return; }
+    const round = rounds[0];
+    await i.showModal({
+      customId: `fb_ratings_modal:${roundId}`,
+      title: 'Rate the Department (1-5)',
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'dept', label: 'Department Overall (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'res', label: 'Resources (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'lead', label: 'Leadership (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'comm', label: 'Communication (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'custom', label: `${round.custom_category} (1-5)`, style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+      ]
+    });
+  }
+
   else if (action === 'fb_edit') {
     // Re-open text modal
     const pending = await sql`SELECT * FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`;
@@ -1291,26 +1330,28 @@ async function handleModal(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
   if (action === 'session_count_modal') {
+    await i.deferReply({ ephemeral: true });
     const sessionId  = parseInt(rest[0]);
     const reviewType = rest[1];
     const postsRaw   = i.fields.getTextInputValue('posts_reviewed').trim();
     const posts      = parseInt(postsRaw) || 0;
 
-    // Step 2: show items modal based on review type
-    const isIndividuals = reviewType === 'individuals';
-    const isMix         = reviewType === 'mix';
+    // Can't open modal from modal — store count and show button to continue
+    await sql`
+      INSERT INTO weekly_report_pending (user_id, cycle_id, section_issues, step)
+      VALUES (${i.user.id}, 0, ${String(posts)}, ${reviewType})
+      ON CONFLICT (user_id) DO UPDATE SET section_issues = ${String(posts)}, step = ${reviewType}, updated_at = NOW()
+    `.catch(() => {});
 
-    await i.showModal({
-      customId: `session_items_modal:${sessionId}:${reviewType}:${posts}`,
-      title: 'Session Summary — Step 2',
-      components: [
-        isIndividuals || isMix
-          ? { type: 1, components: [{ type: 4, customId: 'user_ids', label: 'User IDs reviewed (one per line)', style: 2, required: isIndividuals, maxLength: 2000, placeholder: '123456789012345678\n234567890123456789' }] }
-          : { type: 1, components: [{ type: 4, customId: 'channel_ids', label: 'Channel IDs reviewed (one per line)', style: 2, required: true, maxLength: 2000, placeholder: '123456789012345678\n234567890123456789' }] },
-        ...(!isIndividuals ? [{ type: 1, components: [{ type: 4, customId: 'channel_ids', label: 'Channel/Category IDs (one per line)', style: 2 as const, required: reviewType === 'sections', maxLength: 2000, placeholder: '123456789012345678' }] }] : []),
-      ].filter(Boolean).slice(0, 2) as any
+    const continueBtn = new ButtonBuilder()
+      .setCustomId(`session_items_trigger:${sessionId}:${reviewType}:${posts}`)
+      .setLabel('Continue — Enter Reviewed IDs')
+      .setStyle(ButtonStyle.Primary);
+
+    await i.editReply({
+      content: `Approx. **${posts}** posts reviewed. Click below to enter the IDs.`,
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(continueBtn)],
     });
-
     return;
   }
 
@@ -1725,13 +1766,13 @@ async function handleModal(i: any): Promise<void> {
 
   // ─── FEEDBACK MODALS ──────────────────────────────────────────────────────
   else if (action === 'fb_text_modal') {
+    await i.deferReply({ ephemeral: true });
     const roundId = parseInt(rest[0]);
     const rounds = await sql`SELECT * FROM feedback_rounds WHERE id = ${roundId}`;
-    if (rounds.length === 0) { await i.reply({ embeds: [errorEmbed('Round not found.')], ephemeral: true }); return; }
-    const round = rounds[0];
+    if (rounds.length === 0) { await i.editReply({ embeds: [errorEmbed('Round not found.')] }); return; }
 
-    const general     = i.fields.getTextInputValue('general').trim();
-    const department  = i.fields.getTextInputValue('department').trim();
+    const general      = i.fields.getTextInputValue('general').trim();
+    const department   = i.fields.getTextInputValue('department').trim();
     const improvements = i.fields.getTextInputValue('improvements').trim();
 
     // Save to pending
@@ -1742,17 +1783,15 @@ async function handleModal(i: any): Promise<void> {
       SET general_thoughts = ${general}, department_feedback = ${department}, improvement_suggestions = ${improvements}, updated_at = NOW()
     `;
 
-    // Show ratings modal
-    await i.showModal({
-      customId: `fb_ratings_modal:${roundId}`,
-      title: 'Rate the Department (1-5)',
-      components: [
-        { type: 1, components: [{ type: 4, customId: 'dept', label: 'Department Overall (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
-        { type: 1, components: [{ type: 4, customId: 'res', label: 'Resources (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
-        { type: 1, components: [{ type: 4, customId: 'lead', label: 'Leadership (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
-        { type: 1, components: [{ type: 4, customId: 'comm', label: 'Communication (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
-        { type: 1, components: [{ type: 4, customId: 'custom', label: `${round.custom_category} (1-5)`, style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
-      ]
+    // Can't open modal from modal — show a button to continue to ratings
+    const rateBtn = new ButtonBuilder()
+      .setCustomId(`fb_rate_trigger:${roundId}`)
+      .setLabel('Continue — Rate the Department')
+      .setStyle(ButtonStyle.Primary);
+
+    await i.editReply({
+      content: 'Text saved! Click below to rate the department.',
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(rateBtn)],
     });
   }
 

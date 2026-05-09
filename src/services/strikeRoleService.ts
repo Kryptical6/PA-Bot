@@ -16,8 +16,9 @@ export async function getActiveStrikeCount(userId: string): Promise<number> {
 
 export async function syncStrikeRole(client: Client, userId: string, guildId: string): Promise<void> {
   try {
-    const guild  = await client.guilds.fetch(guildId);
-    const member = await guild.members.fetch(userId).catch((e: any) => { console.error(`Failed to fetch member ${userId}:`, e); return null; });
+    // Use cache first, fall back to fetch
+    const guild = client.guilds.cache.get(guildId) ?? await client.guilds.fetch(guildId);
+    const member = guild.members.cache.get(userId) ?? await guild.members.fetch(userId).catch((e: any) => { console.error(`Failed to fetch member ${userId}:`, e); return null; });
     if (!member) { console.error(`syncStrikeRole: member ${userId} not found in guild`); return; }
 
     const count = await getActiveStrikeCount(userId);
