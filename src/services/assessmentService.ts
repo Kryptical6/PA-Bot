@@ -107,8 +107,10 @@ export async function sendScriptingQuestions(client: Client, userId: string, ses
   const session = sessionRows[0];
   const existing = parseOrder(session.question_order);
   const newOrder = [...existing, ...qs.map((q: any) => q.id)];
-  await sql`UPDATE assessment_sessions SET has_scripting = true, scripting_started = true, question_order = ${JSON.stringify(newOrder)}::jsonb WHERE id = ${sessionId}`;
-  await sendQuestion(client, userId, sessionId, assessmentId, newOrder, session.current_index);
+  // Start at the index right after the main questions (not session.current_index which already equals existing.length)
+  const startIndex = existing.length;
+  await sql`UPDATE assessment_sessions SET has_scripting = true, scripting_started = true, question_order = ${JSON.stringify(newOrder)}::jsonb, current_index = ${startIndex} WHERE id = ${sessionId}`;
+  await sendQuestion(client, userId, sessionId, assessmentId, newOrder, startIndex);
 }
 
 export async function finalizeAssessment(client: Client, userId: string, sessionId: number, hasScripting: boolean): Promise<void> {
