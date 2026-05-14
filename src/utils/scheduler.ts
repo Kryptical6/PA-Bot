@@ -26,7 +26,28 @@ async function runAll(client: Client): Promise<void> {
     await checkWeeklyReportSchedule(client);
     await checkUnreadWarnings(client);
     await checkExpiredSessions(client);
+    await fireReminders(client);
   } catch (e) { console.error('Scheduler error:', e); }
+}
+
+async function fireReminders(client: Client): Promise<void> {
+  try {
+    const due = await sql`SELECT * FROM reminders WHERE fires_at <= NOW() AND sent = false`;
+    for (const r of due) {
+      await sql`UPDATE reminders SET sent = true WHERE id = ${r.id}`;
+      try {
+        const user = await client.users.fetch(r.user_id);
+        const dm   = await user.createDM();
+        const embed = new EmbedBuilder()
+          .setColor(Colors.Yellow)
+          .setTitle('Reminder')
+          .setDescription(r.type === 'custom' ? r.note : `${r.label}${r.note ? `\n\n${r.note}` : ''}`)
+          .setFooter({ text: `Reminder ID: ${r.id}` })
+          .setTimestamp();
+        await dm.send({ embeds: [embed] });
+      } catch { /* silent - DMs disabled */ }
+    }
+  } catch (e) { console.error('Reminder fire error:', e); }
 }
 
 async function checkUnreadWarnings(client: Client): Promise<void> {

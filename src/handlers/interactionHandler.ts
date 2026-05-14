@@ -48,6 +48,7 @@ import * as viewSpaAudit from '../commands/hpa/view_spa_audit';
 import * as configureAudit from '../commands/hpa/configure_audit';
 import * as clearSpaFlag from '../commands/hpa/clear_spa_flag';
 import * as suggest from '../commands/shared/suggest';
+import * as remind from '../commands/shared/remind';
 import * as searchSuggestions from '../commands/spa/search_suggestions';
 import { buildFeedbackEmbed, buildFeedbackRow, buildResponseEmbed, buildSubmittedEmbed } from '../services/feedbackService';
 import { buildSuggestionEmbed, buildPendingSuggestionRow, buildConsideredRow } from '../commands/shared/suggest';
@@ -75,6 +76,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   create_embed: createEmbed, edit_embed: editEmbed,
   suggest, search_suggestions: searchSuggestions,
   set_reminder: setReminder, send_tag: sendTag,
+  remind,
   import_assessment_questions: importAssessmentQ,
   escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,
@@ -1269,7 +1271,8 @@ async function handleSelect(i: any): Promise<void> {
         customId: `escalate_modal:punishment_request`,
         title: 'Punishment Request (Code/Scripts Only)',
         components: [
-          { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Post ID', style: 1, required: true, maxLength: 200 }] },
+          { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Post ID (numbers only, or a + numbers)', style: 1, required: true, maxLength: 20, placeholder: '123456 or a123456' }] },
+          { type: 1, components: [{ type: 4, customId: 'user_id', label: 'User ID (numbers only)', style: 1, required: true, maxLength: 20, placeholder: '123456789012345678' }] },
           { type: 1, components: [{ type: 4, customId: 'information', label: 'Reasoning', style: 2, required: true, minLength: 10, maxLength: 1000, placeholder: 'Please make sure the evidence you are providing clearly highlights the faults.' }] },
           { type: 1, components: [{ type: 4, customId: 'evidence', label: 'Evidence Links (one per line)', style: 2, required: false, maxLength: 1000, placeholder: 'https://imgur.com/...\nhttps://imgur.com/...' }] },
         ]
@@ -1410,6 +1413,11 @@ async function handleModal(i: any): Promise<void> {
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       await i.editReply({ embeds: [errorEmbed('Invalid date. Use YYYY-MM-DD.')] }); return;
+    }
+
+    // Validate post ID: numbers only or 'a' followed by numbers
+    if (!/^\d+$/.test(postId) && !/^a\d+$/.test(postId)) {
+      await i.editReply({ embeds: [errorEmbed('Invalid Post ID. Must be numbers only (e.g. `123456`) or a followed by numbers (e.g. `a123456`).')] }); return;
     }
 
     const guild = i.guild!;
@@ -1703,7 +1711,25 @@ async function handleModal(i: any): Promise<void> {
     const evidence    = actionType === 'punishment_request'
       ? (i.fields.getTextInputValue('evidence').trim() || null)
       : null;
+    const rawUserId   = actionType === 'punishment_request'
+      ? i.fields.getTextInputValue('user_id').trim()
+      : null;
     const m = i.member as GuildMember;
+
+    // Validate post ID format: numbers only, or 'a' followed by numbers
+    const validPostId = /^\d+$/.test(postId) || /^a\d+$/.test(postId);
+    if (!validPostId) {
+      await i.editReply({ embeds: [errorEmbed('Invalid Post ID. Must be numbers only (e.g. `123456`) or a letter a followed by numbers (e.g. `a123456`).')] });
+      return;
+    }
+
+    // Validate user ID for punishment requests
+    if (actionType === 'punishment_request') {
+      if (!rawUserId || !/^\d{17,20}$/.test(rawUserId)) {
+        await i.editReply({ embeds: [errorEmbed('Invalid User ID. Must be a Discord user ID (17-20 digits).')] });
+        return;
+      }
+    }
 
     const existing = await sql`SELECT 1 FROM post_escalations WHERE post_id = ${postId} AND status IN ('pending','claimed')`;
     if (existing.length > 0) {
@@ -1711,10 +1737,10 @@ async function handleModal(i: any): Promise<void> {
       return;
     }
 
-    // Build full information string - append evidence if present
-    const fullInfo = evidence
-      ? `${information}\n\n**Evidence:**\n${evidence}`
-      : information;
+    // Build full information string
+    let fullInfo = information;
+    if (rawUserId) fullInfo = `User ID: \`${rawUserId}\`\n\n${information}`;
+    if (evidence) fullInfo += `\n\n**Evidence:**\n${evidence}`;
 
     const [result] = await sql`
       INSERT INTO post_escalations (post_id, submitted_by, information, action)
@@ -1727,7 +1753,6 @@ async function handleModal(i: any): Promise<void> {
     const embed = buildEscalationEmbed(esc);
     const row   = buildPendingRow(result.id);
 
-    // Punishment requests ping HPA, all others ping SPA
     const pingRole = actionType === 'punishment_request'
       ? `<@&${config.roles.HPA}>`
       : `<@&${config.roles.SPA}>`;

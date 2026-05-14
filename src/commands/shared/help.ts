@@ -7,16 +7,16 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;
   if (!isPA(m)) { await i.reply({ content: 'You do not have permission to use this bot.', ephemeral: true }); return; }
 
-  const embed = new EmbedBuilder().setColor(Colors.Blue).setTitle('📖 Staff Bot Commands').setTimestamp();
+  const embed = new EmbedBuilder().setColor(Colors.Blue).setTitle('Staff Bot Commands').setTimestamp();
 
-  embed.addFields({ name: '👤 All Staff', value: [
+  embed.addFields({ name: 'All Staff', value: [
     '`/help` `/my_logs` `/appeal`',
     '`/tag` `/tag_search`',
     '`/pa_assessment` `/escalate` `/my_escalations`',
-    '`/game_suggest` `/game_suggestions` `/suggest`',
+    '`/suggest` `/remind`',
   ].join('\n') });
 
-  if (isSPA(m)) embed.addFields({ name: '🔹 SPA', value: [
+  if (isSPA(m)) embed.addFields({ name: 'SPA', value: [
     '`/log_mistake` `/staff_profile` `/staff_overview`',
     '`/lookup_post` `/warn_user` `/create_vote` `/spa_quota` `/set_reminder`',
     '`/list_assessments`',
@@ -26,22 +26,21 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   ].join('\n') });
 
   if (isHPA(m)) {
-    embed.addFields({ name: '🔸 HPA — Logs & Staff', value: [
+    embed.addFields({ name: 'HPA - Logs & Staff', value: [
       '`/force_strike` `/manage_log` `/clear_stale`',
       '`/set_escalation` `/recalculate_escalation`',
       '`/notify_user` `/bulk_actions` `/manage_log_tracker`',
     ].join('\n') });
-    embed.addFields({ name: '🔸 HPA — Assessments', value: [
-      '`/create_assessment` `/publish_assessment` `/restrict_assessment`',
-      '`/create_assessment_question` `/edit_assessment_question` `/delete_assessment_question`',
-      '`/view_assessment_results` `/view_active_sessions`',
+    embed.addFields({ name: 'HPA - Assessments', value: [
+      '`/assessment` (create, delete, publish, restrict, list, questions, add_question, edit_question, delete_question, results, sessions)',
+      '`/import_assessment_questions`',
     ].join('\n') });
-    embed.addFields({ name: '🔸 HPA — Game Night & Content', value: [
+    embed.addFields({ name: 'HPA - Game Night & Content', value: [
       '`/create_game_night` `/cancel_game_night` `/delete_suggestion`',
       '`/create_feedback` `/close_feedback`',
       '`/create_embed` `/edit_embed`',
     ].join('\n') });
-    embed.addFields({ name: '🔸 HPA — Audit & Reports', value: [
+    embed.addFields({ name: 'HPA - Audit & Reports', value: [
       '`/view_spa_audit` `/configure_audit` `/clear_spa_flag`',
       '`/setup_weekly_report` `/trigger_weekly_report` `/view_report_status`',
     ].join('\n') });
