@@ -2350,19 +2350,25 @@ async function submitAssessmentAnswer(i: any, sessionId: number, questionId: num
 
 // ─── MILESTONE DM ────────────────────────────────────────────────────────────
 async function sendMilestoneDM(client: any, userId: string): Promise<void> {
-  const rows = await sql`SELECT COUNT(*) as count FROM logs WHERE user_id = ${userId} AND type = 'mistake' AND expires_at > NOW()`;
+  // Only count moderate/severe mistakes for milestone DMs
+  const rows = await sql`
+    SELECT COUNT(*) as count FROM logs
+    WHERE user_id = ${userId} AND type = 'mistake' AND expires_at > NOW()
+    AND (severity = 'moderate' OR severity = 'severe')
+  `;
   const count = parseInt(rows[0].count);
   if (count === 0 || count % 5 !== 0) return;
 
-  const rateRows = await sql`SELECT rate FROM escalation_config WHERE id = 1`;
-  const rate = rateRows[0]?.rate ?? 3;
-  const remaining = Math.max(0, rate - (count % rate || rate));
+  const escalationRate = 15;
+  const remaining = Math.max(0, escalationRate - count);
 
   const embed = new EmbedBuilder()
     .setColor(Colors.Orange)
-    .setTitle('⚠️ Mistake Notification')
+    .setTitle('Mistake Notification')
     .setDescription(
-      `You currently have **${count} active mistake(s)**.\n\n` +
+      `You currently have **${count} active moderate/severe mistake(s)**.
+
+` +
       (remaining > 0 ? `You are **${remaining} mistake(s) away** from receiving a strike.` : 'You are at the escalation threshold.')
     )
     .setTimestamp();

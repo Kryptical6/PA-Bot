@@ -21,14 +21,20 @@ export const data = new SlashCommandBuilder()
         { name: 'Review weekly reports',      value: 'weekly_reports' },
         { name: 'Custom',                     value: 'custom' },
       ))
-    .addStringOption(o => o.setName('when').setDescription('When to remind you: in 30m, 1h, 2h, 4h, 8h, or 24h').setRequired(true)
+    .addStringOption(o => o.setName('when').setDescription('When to remind you').setRequired(true)
       .addChoices(
-        { name: 'In 30 minutes', value: '30m' },
-        { name: 'In 1 hour',     value: '1h' },
-        { name: 'In 2 hours',    value: '2h' },
-        { name: 'In 4 hours',    value: '4h' },
-        { name: 'In 8 hours',    value: '8h' },
-        { name: 'In 24 hours',   value: '24h' },
+        { name: 'In 30 minutes', value: '30m'  },
+        { name: 'In 1 hour',     value: '1h'   },
+        { name: 'In 2 hours',    value: '2h'   },
+        { name: 'In 4 hours',    value: '4h'   },
+        { name: 'In 8 hours',    value: '8h'   },
+        { name: 'In 12 hours',   value: '12h'  },
+        { name: 'In 24 hours',   value: '24h'  },
+        { name: 'In 2 days',     value: '2d'   },
+        { name: 'In 3 days',     value: '3d'   },
+        { name: 'In 5 days',     value: '5d'   },
+        { name: 'In 7 days',     value: '7d'   },
+        { name: 'In 14 days',    value: '14d'  },
       ))
     .addStringOption(o => o.setName('note').setDescription('Custom reminder text (required if type is Custom)').setMaxLength(500))
   )
@@ -53,11 +59,17 @@ const TYPE_LABELS: Record<string, string> = {
 
 const DURATIONS: Record<string, number> = {
   '30m': 30 * 60 * 1000,
-  '1h':  60 * 60 * 1000,
+  '1h':  1  * 60 * 60 * 1000,
   '2h':  2  * 60 * 60 * 1000,
   '4h':  4  * 60 * 60 * 1000,
   '8h':  8  * 60 * 60 * 1000,
+  '12h': 12 * 60 * 60 * 1000,
   '24h': 24 * 60 * 60 * 1000,
+  '2d':  2  * 24 * 60 * 60 * 1000,
+  '3d':  3  * 24 * 60 * 60 * 1000,
+  '5d':  5  * 24 * 60 * 60 * 1000,
+  '7d':  7  * 24 * 60 * 60 * 1000,
+  '14d': 14 * 24 * 60 * 60 * 1000,
 };
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
