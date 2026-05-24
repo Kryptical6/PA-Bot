@@ -2205,6 +2205,30 @@ async function handleModal(i: any): Promise<void> {
   }
 
   // ─── TAG MODALS ────────────────────────────────────────────────────────────
+  else if (action === 'severity_guide_modal') {
+    await i.deferReply({ ephemeral: true });
+    const minor    = i.fields.getTextInputValue('minor').trim();
+    const moderate = i.fields.getTextInputValue('moderate').trim();
+    const severe   = i.fields.getTextInputValue('severe').trim();
+
+    await sql`
+      UPDATE severity_guide SET
+        minor = ${minor}, moderate = ${moderate}, severe = ${severe}, updated_at = NOW()
+      WHERE id = 1
+    `;
+
+    const embed = new EmbedBuilder()
+      .setColor(Colors.Green)
+      .setTitle('Severity Guide Updated')
+      .addFields(
+        { name: 'Minor',    value: minor },
+        { name: 'Moderate', value: moderate },
+        { name: 'Severe',   value: severe },
+      )
+      .setTimestamp();
+    await i.editReply({ embeds: [embed] });
+  }
+
   else if (action === 'create_tag_modal') {
     await i.deferReply({ ephemeral: true });
     const category = rest[0] ?? 'Other';
