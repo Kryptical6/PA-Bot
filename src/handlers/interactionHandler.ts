@@ -67,6 +67,7 @@ import * as notifyUser from '../commands/hpa/notify_user';
 import * as bulkActions from '../commands/hpa/bulk_actions';
 import * as manageLogTracker from '../commands/hpa/manage_log_tracker';
 import * as assessment from '../commands/hpa/assessment';
+import * as severityGuide from '../commands/hpa/severity_guide';
 
 const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Promise<void> }> = {
   help, my_logs: myLogs, appeal, tag, tag_search: tagSearch, pa_assessment: paAssessment,
@@ -90,7 +91,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
   manage_log_tracker: manageLogTracker,
-  assessment,
+  assessment, severity_guide: severityGuide,
 };
 
 export async function handleInteraction(interaction: Interaction): Promise<void> {

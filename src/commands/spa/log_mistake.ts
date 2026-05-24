@@ -1,7 +1,7 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType } from 'discord.js';
 import { isSPA, canLogAgainst } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
-import { config } from '../../config';
+import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
   .setName('log_mistake')
@@ -24,15 +24,22 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   if (!target) { await i.reply({ embeds: [errorEmbed('User not found.')], ephemeral: true }); return; }
   if (!canLogAgainst(m, target)) { await i.reply({ embeds: [errorEmbed('You cannot log a mistake against this user.')], ephemeral: true }); return; }
 
-  // Show severity guide first as an ephemeral embed with a Continue button
+  // Fetch severity guide from DB (falls back to defaults if not set)
+  const guideRows = await sql`SELECT * FROM severity_guide WHERE id = 1`;
+  const guide = guideRows[0] ?? {
+    minor:    'Minor - Small formatting issues, missing non-critical information, minor rule violations with low impact.',
+    moderate: 'Moderate - Clear rule violations, missing required proof, incorrect category, invalid payment range.',
+    severe:   'Severe - Stolen/AI-generated assets, prohibited services, scripting violations, repeat offences, significant fraud indicators.',
+  };
+
   const guideEmbed = new EmbedBuilder()
     .setColor(severity === 'minor' ? Colors.Yellow : severity === 'moderate' ? Colors.Orange : Colors.Red)
     .setTitle('Severity Guide')
     .setDescription('Make sure the severity you selected matches the mistake below.')
     .addFields(
-      { name: 'Minor',    value: config.severityGuide.minor },
-      { name: 'Moderate', value: config.severityGuide.moderate },
-      { name: 'Severe',   value: config.severityGuide.severe },
+      { name: 'Minor',    value: guide.minor },
+      { name: 'Moderate', value: guide.moderate },
+      { name: 'Severe',   value: guide.severe },
     )
     .setFooter({ text: `You selected: ${severity.charAt(0).toUpperCase() + severity.slice(1)}` })
     .setTimestamp();

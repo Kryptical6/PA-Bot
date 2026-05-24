@@ -44,6 +44,7 @@ import { data as bulkActions }              from './commands/hpa/bulk_actions';
 import { data as manageLogTracker }         from './commands/hpa/manage_log_tracker';
 import { data as clearStale }               from './commands/hpa/clear_stale';
 import { data as assessment }               from './commands/hpa/assessment';
+import { data as severityGuide }           from './commands/hpa/severity_guide';
 import { data as importAssessmentQuestions } from './commands/hpa/import_assessment_questions';
 import { data as createGameNight }          from './commands/hpa/create_game_night';
 import { data as cancelGameNight }          from './commands/hpa/cancel_game_night';
@@ -70,7 +71,7 @@ const commands = [
   // HPA
   forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser,
   bulkActions, manageLogTracker, clearStale,
-  assessment, importAssessmentQuestions,
+  assessment, severityGuide, importAssessmentQuestions,
   createGameNight, cancelGameNight, deleteSuggestion,
   createFeedback, closeFeedback,
   viewSpaAudit, configureAudit, clearSpaFlag,
