@@ -233,8 +233,8 @@ async function handleButton(i: any): Promise<void> {
       if (original) await original.edit({ embeds: [resultEmbed], components: [] });
     } catch { /* silent */ }
 
-    // DM logger
-    await safeDM(i.client, pending.logged_by, successEmbed('Log Approved', `Your log against <@${pending.user_id}> was approved as a **${type}**.`), 'log approved');
+    // DM logger with post ID
+    await safeDM(i.client, pending.logged_by, successEmbed('Log Approved', `Your log against <@${pending.user_id}> was approved as a **${type}**. You may now delete post \`${pending.post_id}\`.`), 'log approved');
 
     // DM user if strike
     if (type === 'strike') {
@@ -372,6 +372,40 @@ async function handleButton(i: any): Promise<void> {
     }
 
     await submitAssessmentAnswer(i, sessionId, questionId, answer, null, session);
+  }
+
+  else if (action === 'log_sev') {
+    const m = i.member as GuildMember;
+    if (!isHPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const pendingId = parseInt(rest[0]);
+    await i.showModal({
+      customId: `modal_change_sev:${pendingId}`,
+      title: 'Change Severity',
+      components: [{ type: 1, components: [{ type: 4, customId: 'severity', label: 'New severity (minor/moderate/severe)', style: 1, required: true, maxLength: 8, placeholder: 'minor / moderate / severe' }] }]
+    });
+  }
+
+  // Assessment start/cancel
+  else if (action === 'assess_start') {
+    const sessionId = parseInt(rest[0]);
+    const [session] = await sql`SELECT * FROM assessment_sessions WHERE id = ${sessionId}`;
+    if (!session || session.user_id !== i.user.id) { await i.reply({ content: 'Session not found.', ephemeral: true }); return; }
+    await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Assessment Started').setDescription('Good luck! Your first question is on its way.').setTimestamp()], components: [] });
+    const order = parseOrder(session.question_order);
+    await sendQuestion(i.client, i.user.id, sessionId, session.assessment_id, order, 0);
+  }
+
+  else if (action === 'assess_cancel') {
+    const sessionId = parseInt(rest[0]);
+    const [session] = await sql`SELECT * FROM assessment_sessions WHERE id = ${sessionId}`;
+    if (!session || session.user_id !== i.user.id) { await i.reply({ content: 'Session not found.', ephemeral: true }); return; }
+    await sql`DELETE FROM assessment_sessions WHERE id = ${sessionId}`;
+    await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('Assessment Cancelled').setDescription('Your assessment session has been cancelled.').setTimestamp()], components: [] });
+    // Log the cancellation
+    try {
+      const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
+      await ch.send({ embeds: [new EmbedBuilder().setColor(Colors.Orange).setTitle('Assessment Cancelled').setDescription(`<@${i.user.id}> cancelled their assessment session (Session ID: ${sessionId}).`).setTimestamp()] });
+    } catch { /* silent */ }
   }
 
   else if (action === 'scripting') {
@@ -1433,10 +1467,11 @@ async function handleModal(i: any): Promise<void> {
     const embed = pendingLogEmbed({ userId: targetId, postId, reason, loggedBy: i.user.id, date, pendingId: result.id, severity });
     const approve = new ButtonBuilder().setCustomId(`log_approve:${result.id}`).setLabel('Approve').setStyle(ButtonStyle.Success);
     const editBtn = new ButtonBuilder().setCustomId(`log_edit:${result.id}`).setLabel('Edit Reason').setStyle(ButtonStyle.Primary);
+    const sevBtn  = new ButtonBuilder().setCustomId(`log_sev:${result.id}`).setLabel('Change Severity').setStyle(ButtonStyle.Secondary);
     const deny    = new ButtonBuilder().setCustomId(`log_deny:${result.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger);
 
     const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
-    await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, deny)] });
+    await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, sevBtn, deny)] });
     await i.editReply({ embeds: [successEmbed('Submitted', 'Your log has been submitted for HPA review.')] });
     return;
   }
@@ -1545,6 +1580,32 @@ async function handleModal(i: any): Promise<void> {
     } catch (e) {
       await i.reply({ embeds: [errorEmbed('Failed to edit embed. Make sure the message ID and channel are correct.')], ephemeral: true });
     }
+  }
+
+  else if (action === 'modal_change_sev') {
+    await i.deferReply({ flags: 64 });
+    const pendingId = parseInt(rest[0]);
+    const sevRaw    = i.fields.getTextInputValue('severity').trim().toLowerCase();
+    const valid     = ['minor', 'moderate', 'severe'];
+    if (!valid.includes(sevRaw)) {
+      await i.editReply({ embeds: [errorEmbed('Invalid severity. Must be minor, moderate, or severe.')] }); return;
+    }
+    const [pending] = await sql`SELECT * FROM pending_logs WHERE id = ${pendingId}`;
+    if (!pending) { await i.editReply({ embeds: [errorEmbed('Log not found.')] }); return; }
+    await sql`UPDATE pending_logs SET severity = ${sevRaw} WHERE id = ${pendingId}`;
+
+    // Update the embed in HPA channel
+    try {
+      const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
+      const msgs = await ch.messages.fetch({ limit: 50 });
+      const target = msgs.find((m: any) => m.embeds[0]?.footer?.text?.includes(`Pending ID: ${pendingId}`));
+      if (target) {
+        const updatedEmbed = pendingLogEmbed({ userId: pending.user_id, postId: pending.post_id, reason: pending.reason, loggedBy: pending.logged_by, date: typeof pending.date === 'string' ? pending.date.split('T')[0] : new Date(pending.date).toISOString().split('T')[0], pendingId, severity: sevRaw });
+        await target.edit({ embeds: [updatedEmbed] });
+      }
+    } catch { /* silent */ }
+
+    await i.editReply({ embeds: [successEmbed('Severity Updated', `Log #${pendingId} severity changed to **${sevRaw}**.`)] });
   }
 
   else if (action === 'modal_deny_log') {
@@ -2327,6 +2388,11 @@ async function checkStrikeAlert(client: any, userId: string): Promise<void> {
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+function parseOrder(raw: any): number[] {
+  if (Array.isArray(raw)) return raw.map(Number);
+  try { return JSON.parse(typeof raw === 'string' ? raw : JSON.stringify(raw)).map(Number); } catch { return []; }
+}
+
 async function submitAssessmentAnswer(i: any, sessionId: number, questionId: number, answer: string, reason: string | null, session: any): Promise<void> {
   const existing = await sql`SELECT 1 FROM assessment_responses WHERE session_id = ${sessionId} AND question_id = ${questionId}`;
   if (existing.length > 0) return;

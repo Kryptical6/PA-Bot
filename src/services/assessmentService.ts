@@ -3,6 +3,7 @@ import { sql } from '../database/client';
 import { config } from '../config';
 import { dmUser } from './dmService';
 import { infoEmbed } from '../utils/embeds';
+import { aiMarkAssessment } from './aiMarkingService';
 
 function parseOrder(raw: any): number[] {
   if (Array.isArray(raw)) return raw.map(Number);
@@ -18,36 +19,43 @@ export async function startAssessmentSession(client: Client, userId: string, ass
   const shuffled = mainQs.map((q: any) => q.id).sort(() => Math.random() - 0.5);
   const deadline = new Date(Date.now() + Number(a.deadline_ms));
 
-  await sql`
+  const [sessionRow] = await sql`
     INSERT INTO assessment_sessions (user_id, assessment_id, question_order, current_index, deadline)
     VALUES (${userId}, ${assessmentId}, ${JSON.stringify(shuffled)}::jsonb, 0, ${deadline.toISOString()})
     ON CONFLICT (user_id, assessment_id) DO UPDATE
     SET question_order = ${JSON.stringify(shuffled)}::jsonb, current_index = 0, deadline = ${deadline.toISOString()}, started_at = NOW()
+    RETURNING id
   `;
-
-  const sessionRows = await sql`SELECT id FROM assessment_sessions WHERE user_id = ${userId} AND assessment_id = ${assessmentId}`;
-  const sessionId = sessionRows[0].id;
+  const sessionId = sessionRow.id;
 
   const descParts: string[] = [
     '**Welcome to your assessment.**',
     '',
-    'Each question has a **Post ID**. Review the post then submit your answer.',
+    'Each question shows a Post ID. Review the post then submit your answer using the buttons.',
+    'Deny and Suspend answers require a reason.',
     '',
   ];
   if (a.description) descParts.push(`**Briefing:**\n${a.description}`, '');
   descParts.push(
     `**Questions:** ${shuffled.length} | **Deadline:** <t:${Math.floor(deadline.getTime() / 1000)}:R>`,
-    `**Pass Threshold:** ${a.pass_threshold}%`
+    `**Pass Threshold:** ${a.pass_threshold}%`,
+    '',
+    'Click **Start** when you are ready, or **Cancel** to cancel.',
   );
 
   const welcomeEmbed = new EmbedBuilder()
     .setColor(Colors.Blue)
-    .setTitle(`📝 ${a.title}`)
+    .setTitle(a.title)
     .setDescription(descParts.join('\n'))
     .setTimestamp();
 
-  await dmUser(client, userId, { embeds: [welcomeEmbed] });
-  await sendQuestion(client, userId, sessionId, assessmentId, shuffled, 0);
+  const startBtn  = new ButtonBuilder().setCustomId(`assess_start:${sessionId}`).setLabel('Start').setStyle(ButtonStyle.Success);
+  const cancelBtn = new ButtonBuilder().setCustomId(`assess_cancel:${sessionId}`).setLabel('Cancel').setStyle(ButtonStyle.Danger);
+
+  await dmUser(client, userId, {
+    embeds: [welcomeEmbed],
+    components: [new ActionRowBuilder<ButtonBuilder>().addComponents(startBtn, cancelBtn)],
+  });
 }
 
 export async function sendQuestion(client: Client, userId: string, sessionId: number, assessmentId: number, questionOrder: number[], index: number): Promise<void> {
@@ -115,38 +123,25 @@ export async function sendScriptingQuestions(client: Client, userId: string, ses
 
 export async function finalizeAssessment(client: Client, userId: string, sessionId: number, hasScripting: boolean): Promise<void> {
   await sql`UPDATE assessment_sessions SET has_scripting = ${hasScripting} WHERE id = ${sessionId}`;
+
+  const responses = await sql`SELECT * FROM assessment_responses WHERE session_id = ${sessionId}`;
+  const total = responses.length;
+
   const sessionRows = await sql`SELECT * FROM assessment_sessions WHERE id = ${sessionId}`;
   const s = sessionRows[0];
 
-  const responses = await sql`
-    SELECT r.*, q.correct_answer, q.correct_reason, q.is_scripting, q.post_id
-    FROM assessment_responses r JOIN assessment_questions q ON r.question_id = q.id
-    WHERE r.session_id = ${sessionId} ORDER BY r.answered_at ASC
-  `;
-
-  let correct = 0;
-  for (const r of responses) {
-    const ok = r.action === r.correct_answer;
-    await sql`UPDATE assessment_responses SET is_correct = ${ok} WHERE id = ${r.id}`;
-    if (ok) correct++;
-  }
-
-  const total = responses.length;
-  const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
-  const assessmentRows = await sql`SELECT * FROM assessments WHERE id = ${s.assessment_id}`;
-  const assessment = assessmentRows[0];
-  const passed = pct >= assessment.pass_threshold;
-
-  const resultRows = await sql`
+  const [resultRow] = await sql`
     INSERT INTO assessment_results (user_id, assessment_id, session_id, score, total, percentage, passed)
-    VALUES (${userId}, ${s.assessment_id}, ${sessionId}, ${correct}, ${total}, ${pct}, ${passed})
+    VALUES (${userId}, ${s.assessment_id}, ${sessionId}, 0, ${total}, 0, false)
     RETURNING id
   `;
-  const resultId = resultRows[0].id;
+  const resultId = resultRow.id;
 
-  console.log(`Assessment finalized: user=${userId} result=${resultId} score=${correct}/${total} (${pct}%)`);
-  await dmUser(client, userId, { embeds: [infoEmbed('Assessment Complete', 'Your responses are being processed. Please wait for your result.')] });
-  await sendHPAReview(client, userId, sessionId, resultId, responses, assessment, correct, total, pct, passed);
+  console.log(`Assessment finalized: user=${userId} result=${resultId} total=${total} - sending to AI marking`);
+  await dmUser(client, userId, { embeds: [infoEmbed('Assessment Complete', 'Your responses are being processed by our system. You will receive your result shortly.')] });
+
+  // AI marks the assessment and sends to HPA for confirmation
+  await aiMarkAssessment(client, userId, sessionId, resultId);
 }
 
 export function buildReviewEmbed(

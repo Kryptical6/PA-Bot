@@ -30,4 +30,9 @@ export const config = {
   gameNight: {
     reminderMinutes: [60, 10],
   },
+  severityGuide: {
+    minor:    'Minor - Small formatting issues, missing non-critical information, minor rule violations with low impact.',
+    moderate: 'Moderate - Clear rule violations, missing required proof, incorrect category, invalid payment range.',
+    severe:   'Severe - Stolen/AI-generated assets, prohibited services, scripting violations, repeat offences, significant fraud indicators.',
+  },
 } as const;
