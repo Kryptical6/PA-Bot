@@ -13,10 +13,10 @@ export const data = new SlashCommandBuilder()
   .addUserOption(o => o.setName('user').setDescription('Staff member to log').setRequired(true))
   .addStringOption(o => o.setName('severity').setDescription('Severity of the mistake').setRequired(true)
     .addChoices(
-      { name: 'Minor',         value: 'minor' },
-      { name: 'Moderate',      value: 'moderate' },
-      { name: 'Severe',        value: 'severe' },
-      { name: 'Missed Quota',  value: 'quota' },
+      { name: 'Minor',        value: 'minor' },
+      { name: 'Moderate',     value: 'moderate' },
+      { name: 'Severe',       value: 'severe' },
+      { name: 'Missed Quota', value: 'quota' },
     ));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
@@ -29,7 +29,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   if (!target) { await i.reply({ embeds: [errorEmbed('User not found.')], ephemeral: true }); return; }
   if (!canLogAgainst(m, target)) { await i.reply({ embeds: [errorEmbed('You cannot log a mistake against this user.')], ephemeral: true }); return; }
 
-  // Missed Quota — show dropdown first
+  // Missed Quota - show dropdown first
   if (severity === 'quota') {
     const select = new StringSelectMenuBuilder()
       .setCustomId(`quota_sel:${target.id}`)
@@ -37,11 +37,11 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       .addOptions(
         new StringSelectMenuOptionBuilder()
           .setLabel('More than 50% complete')
-          .setDescription('Moderate mistake — submitted over half their quota')
+          .setDescription('Moderate mistake - submitted over half their quota')
           .setValue('quota_moderate'),
         new StringSelectMenuOptionBuilder()
           .setLabel('Less than 50% complete')
-          .setDescription('Severe mistake — submitted less than half their quota')
+          .setDescription('Severe mistake - submitted less than half their quota')
           .setValue('quota_severe'),
       );
 
@@ -49,7 +49,11 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       embeds: [new EmbedBuilder()
         .setColor(Colors.Orange)
         .setTitle('Missed Quota')
-        .setDescription(`How much of their quota did <@${target.id}> complete today?\n\n- **More than 50%** - Moderate mistake\n- **Less than 50%** - Severe mistake`)
+        .setDescription(
+          `How much of their quota did <@${target.id}> complete?\n\n` +
+          `**More than 50%** - Moderate mistake\n` +
+          `**Less than 50%** - Severe mistake`
+        )
         .setTimestamp()],
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
       ephemeral: true,
@@ -63,17 +67,17 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
     if (!sel) { await i.editReply({ content: 'Timed out.', embeds: [], components: [] }); return; }
 
-    const quotaType = sel.values[0]; // 'quota_moderate' or 'quota_severe'
+    const quotaType        = sel.values[0];
     const resolvedSeverity = quotaType === 'quota_severe' ? 'severe' : 'moderate';
-    const today = new Date().toISOString().split('T')[0];
+    const today            = new Date().toISOString().split('T')[0];
 
     await sel.showModal({
       customId: `log_mistake:${target.id}:${resolvedSeverity}:quota`,
-      title: `Missed Quota — ${resolvedSeverity === 'severe' ? 'Severe' : 'Moderate'}`,
+      title: `Missed Quota - ${resolvedSeverity === 'severe' ? 'Severe' : 'Moderate'}`,
       components: [
         { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Date of missed quota (YYYY-MM-DD)', style: 1, required: true, maxLength: 10, value: today }] },
-        { type: 1, components: [{ type: 4, customId: 'date', label: 'Date (YYYY-MM-DD)', style: 1, required: true, value: today }] },
-        { type: 1, components: [{ type: 4, customId: 'reason', label: 'Additional notes (optional)', style: 2, required: false, maxLength: 1000, placeholder: 'e.g. Submitted 3 out of 10 required logs' }] },
+        { type: 1, components: [{ type: 4, customId: 'posts_reviewed', label: 'How many posts did they review? (number)', style: 1, required: true, maxLength: 6, placeholder: 'e.g. 12' }] },
+        { type: 1, components: [{ type: 4, customId: 'reason', label: 'Additional notes (optional)', style: 2, required: false, maxLength: 500 }] },
       ]
     });
 
@@ -81,7 +85,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     return;
   }
 
-  // Normal severity — fetch severity guide and show it
+  // Normal severity - fetch severity guide and show it
   const guideRows = await sql`SELECT * FROM severity_guide WHERE id = 1`;
   const guide = guideRows[0] ?? {
     minor:    'Outcome was correct but execution was slightly off.',
