@@ -17,6 +17,7 @@ export async function checkEscalation(client: Client, userId: string): Promise<v
     AND type = 'mistake'
     AND expires_at > NOW()
     AND (severity = 'moderate' OR severity = 'severe')
+    AND (converted_to_strike = false OR converted_to_strike IS NULL)
     ORDER BY date ASC
   `;
   const count = mistakes.length;
@@ -37,10 +38,10 @@ export async function checkEscalation(client: Client, userId: string): Promise<v
     }
   }
 
-  // Escalate at 15 moderate/severe mistakes
+  // Escalate at 15 moderate/severe mistakes — mark as converted, don't delete
   if (count >= escalationRate) {
     const ids = mistakes.slice(0, escalationRate).map((m: any) => m.id);
-    await sql`DELETE FROM logs WHERE id = ANY(${ids})`;
+    await sql`UPDATE logs SET converted_to_strike = true WHERE id = ANY(${ids})`;
     await sql`DELETE FROM escalation_warnings WHERE user_id = ${userId} AND threshold = ${escalationRate}`;
 
     const exp = new Date();
