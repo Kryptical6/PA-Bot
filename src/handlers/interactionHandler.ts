@@ -112,7 +112,8 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
   } catch (err) {
     console.error('Interaction error:', err);
     try {
-      const msg = { content: '❌ An error occurred.', ephemeral: true };
+      const isDM = !(interaction as any).guild;
+      const msg = { content: 'An error occurred.', ephemeral: !isDM };
       if ((interaction as any).replied) return;
       if ((interaction as any).deferred) await (interaction as any).editReply(msg);
       else if ((interaction as any).reply) await (interaction as any).reply(msg);
@@ -148,6 +149,34 @@ async function handleButton(i: any): Promise<void> {
 
   // Strike role buttons
   if (action === 'strike_role_assign' || action === 'strike_role_skip') { await handleStrikeRoleButton(i, action, rest); return; }
+
+  // Quota strike conversion
+  if (action === 'quota_strike') {
+    const pendingId = parseInt(rest[0]);
+    const targetId  = rest[1];
+    await i.deferUpdate();
+    // Convert the pending log to a strike directly
+    const [pending] = await sql`SELECT * FROM pending_logs WHERE id = ${pendingId}`;
+    if (!pending) { await i.editReply({ content: 'Log not found.', components: [] }); return; }
+    const exp = new Date(); exp.setDate(exp.getDate() + config.expiry.defaultDays);
+    await sql`INSERT INTO logs (user_id, type, reason, post_id, logged_by, date, expires_at, severity) VALUES (${targetId}, 'strike', ${pending.reason}, ${pending.post_id}, ${pending.logged_by}, ${pending.date}, ${exp.toISOString()}, 'severe')`;
+    await sql`DELETE FROM pending_logs WHERE id = ${pendingId}`;
+    await updateLogTracker(i.client);
+    await checkStrikeAlert(i.client, targetId);
+    const strikeCount = await getActiveStrikeCount(targetId);
+    const prompt = buildStrikeRolePrompt(targetId, strikeCount);
+    if (prompt) {
+      await i.editReply({ ...prompt, components: [...(prompt.components ?? [])] });
+    } else {
+      await i.editReply({ embeds: [successEmbed('Strike Issued', `Quota miss converted to strike for <@${targetId}>.`)], components: [] });
+    }
+    return;
+  }
+
+  if (action === 'quota_keep') {
+    await i.update({ embeds: [successEmbed('Kept as Mistake', 'The quota miss has been kept as a mistake and sent for HPA review.')], components: [] });
+    return;
+  }
 
   // Weekly report buttons
   const wrActions = ['wr_submit', 'wr_extend', 'wr_confirm', 'wr_edit', 'wr_modal2_trigger'];
@@ -1384,7 +1413,8 @@ async function handleModal(i: any): Promise<void> {
   }
 
   else if (action === 'session_items_modal') {
-    await i.deferReply({ ephemeral: true });
+    const isDM = !i.guild;
+    await i.deferReply({ ephemeral: !isDM });
     const sessionId  = parseInt(rest[0]);
     const reviewType = rest[1];
     const posts      = parseInt(rest[2]) || 0;
@@ -1440,30 +1470,40 @@ async function handleModal(i: any): Promise<void> {
 
   if (action === 'log_mistake') {
     await i.deferReply({ ephemeral: true });
-    const targetId = rest[0];
-    const severity = rest[1] ?? 'minor';
-    const postId   = i.fields.getTextInputValue('post_id').trim();
-    const date     = i.fields.getTextInputValue('date').trim();
-    const reason   = i.fields.getTextInputValue('reason').trim();
+    const targetId   = rest[0];
+    const severity   = rest[1] ?? 'minor';
+    const isQuota    = rest[2] === 'quota';
+    const dateField  = i.fields.getTextInputValue('post_id').trim(); // For quota, this is the date
+    const postId     = isQuota ? `QUOTA-${dateField}` : dateField;
+    const date       = i.fields.getTextInputValue('date').trim();
+    const reasonRaw  = i.fields.getTextInputValue('reason').trim();
+    const reason     = isQuota
+      ? `Missed quota on ${dateField}.${reasonRaw ? ' ' + reasonRaw : ''}`
+      : reasonRaw;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       await i.editReply({ embeds: [errorEmbed('Invalid date. Use YYYY-MM-DD.')] }); return;
     }
 
-    // Validate post ID: numbers only or 'a' followed by numbers
-    if (!/^\d+$/.test(postId) && !/^a\d+$/.test(postId)) {
+    // Validate post ID: numbers only or 'a' followed by numbers (skip for quota)
+    if (!isQuota && !/^\d+$/.test(postId) && !/^a\d+$/.test(postId)) {
       await i.editReply({ embeds: [errorEmbed('Invalid Post ID. Must be numbers only (e.g. `123456`) or a followed by numbers (e.g. `a123456`).')] }); return;
     }
 
-    const guild = i.guild!;
-    const targetMember = await guild.members.fetch(targetId).catch(() => null);
-    if (!targetMember) { await i.editReply({ embeds: [errorEmbed('This user is no longer in the server.')] }); return; }
+    const guild = i.guild;
+    if (guild) {
+      const targetMember = await guild.members.fetch(targetId).catch(() => null);
+      if (!targetMember) { await i.editReply({ embeds: [errorEmbed('This user is no longer in the server.')] }); return; }
+    }
 
-    const existing = await sql`SELECT 1 FROM used_post_ids WHERE post_id = ${postId}`;
-    if (existing.length > 0) { await i.editReply({ embeds: [errorEmbed(`Post ID \`${postId}\` has already been logged.`)] }); return; }
+    // For non-quota, check duplicate post ID
+    if (!isQuota) {
+      const existing = await sql`SELECT 1 FROM used_post_ids WHERE post_id = ${postId}`;
+      if (existing.length > 0) { await i.editReply({ embeds: [errorEmbed(`Post ID \`${postId}\` has already been logged.`)] }); return; }
+    }
 
     const [result] = await sql`INSERT INTO pending_logs (user_id, post_id, reason, logged_by, date, severity) VALUES (${targetId}, ${postId}, ${reason}, ${i.user.id}, ${date}, ${severity}) RETURNING id`;
-    await sql`INSERT INTO used_post_ids (post_id) VALUES (${postId}) ON CONFLICT DO NOTHING`;
+    if (!isQuota) await sql`INSERT INTO used_post_ids (post_id) VALUES (${postId}) ON CONFLICT DO NOTHING`;
 
     const embed = pendingLogEmbed({ userId: targetId, postId, reason, loggedBy: i.user.id, date, pendingId: result.id, severity });
     const approve = new ButtonBuilder().setCustomId(`log_approve:${result.id}`).setLabel('Approve').setStyle(ButtonStyle.Success);
@@ -1473,7 +1513,18 @@ async function handleModal(i: any): Promise<void> {
 
     const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
     await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, sevBtn, deny)] });
-    await i.editReply({ embeds: [successEmbed('Submitted', 'Your log has been submitted for HPA review.')] });
+
+    // For severe quota misses, offer to convert to strike
+    if (isQuota && severity === 'severe') {
+      const strikeBtn = new ButtonBuilder().setCustomId(`quota_strike:${result.id}:${targetId}`).setLabel('Convert to Strike').setStyle(ButtonStyle.Danger);
+      const keepBtn   = new ButtonBuilder().setCustomId(`quota_keep:${result.id}`).setLabel('Keep as Mistake').setStyle(ButtonStyle.Secondary);
+      await i.editReply({
+        embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('Severe Quota Miss').setDescription(`Log submitted. Since this is a severe quota miss (<50%), would you like to convert it directly to a strike instead?`).setTimestamp()],
+        components: [new ActionRowBuilder<ButtonBuilder>().addComponents(strikeBtn, keepBtn)],
+      });
+    } else {
+      await i.editReply({ embeds: [successEmbed('Submitted', 'Your log has been submitted for HPA review.')] });
+    }
     return;
   }
 
@@ -1637,21 +1688,30 @@ async function handleModal(i: any): Promise<void> {
 
     await sql`UPDATE pending_logs SET reason = ${reason} WHERE id = ${pendingId}`;
 
-    // Update embed in HPA channel
+    // Update embed in HPA channel - preserve severity and buttons
     try {
       const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
       const msgs = await ch.messages.fetch({ limit: 50 });
       const target = msgs.find((m: any) => m.embeds[0]?.footer?.text?.includes(`Pending ID: ${pendingId}`));
       if (target) {
-        const approve = new ButtonBuilder().setCustomId(`log_approve:${pendingId}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success);
-        const editBtn = new ButtonBuilder().setCustomId(`log_edit:${pendingId}`).setLabel('✏️ Edit Reason').setStyle(ButtonStyle.Primary);
-        const deny    = new ButtonBuilder().setCustomId(`log_deny:${pendingId}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger);
-        const updatedEmbed = pendingLogEmbed({ userId: pending.user_id, postId: pending.post_id, reason, loggedBy: pending.logged_by, date: typeof pending.date === 'string' ? pending.date.split('T')[0] : new Date(pending.date).toISOString().split('T')[0], pendingId });
-        await target.edit({ embeds: [updatedEmbed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, deny)] });
+        const approve = new ButtonBuilder().setCustomId(`log_approve:${pendingId}`).setLabel('Approve').setStyle(ButtonStyle.Success);
+        const editBtn = new ButtonBuilder().setCustomId(`log_edit:${pendingId}`).setLabel('Edit Reason').setStyle(ButtonStyle.Primary);
+        const sevBtn  = new ButtonBuilder().setCustomId(`log_sev:${pendingId}`).setLabel('Change Severity').setStyle(ButtonStyle.Secondary);
+        const deny    = new ButtonBuilder().setCustomId(`log_deny:${pendingId}`).setLabel('Deny').setStyle(ButtonStyle.Danger);
+        const updatedEmbed = pendingLogEmbed({
+          userId: pending.user_id,
+          postId: pending.post_id,
+          reason,
+          loggedBy: pending.logged_by,
+          date: typeof pending.date === 'string' ? pending.date.split('T')[0] : new Date(pending.date).toISOString().split('T')[0],
+          pendingId,
+          severity: pending.severity ?? 'minor',
+        });
+        await target.edit({ embeds: [updatedEmbed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, sevBtn, deny)] });
       }
     } catch { /* silent */ }
 
-    await i.editReply({ embeds: [successEmbed('Updated', `Reason updated to: ${reason}`)] });
+    await i.editReply({ embeds: [successEmbed('Updated', `Reason updated.`)] });
   }
 
   else if (action === 'modal_assess') {

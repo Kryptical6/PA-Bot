@@ -1,4 +1,8 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType } from 'discord.js';
+import {
+  ChatInputCommandInteraction, SlashCommandBuilder, GuildMember,
+  EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder,
+  ComponentType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder
+} from 'discord.js';
 import { isSPA, canLogAgainst } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
@@ -9,9 +13,10 @@ export const data = new SlashCommandBuilder()
   .addUserOption(o => o.setName('user').setDescription('Staff member to log').setRequired(true))
   .addStringOption(o => o.setName('severity').setDescription('Severity of the mistake').setRequired(true)
     .addChoices(
-      { name: 'Minor',    value: 'minor' },
-      { name: 'Moderate', value: 'moderate' },
-      { name: 'Severe',   value: 'severe' },
+      { name: 'Minor',         value: 'minor' },
+      { name: 'Moderate',      value: 'moderate' },
+      { name: 'Severe',        value: 'severe' },
+      { name: 'Missed Quota',  value: 'quota' },
     ));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
@@ -24,12 +29,64 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   if (!target) { await i.reply({ embeds: [errorEmbed('User not found.')], ephemeral: true }); return; }
   if (!canLogAgainst(m, target)) { await i.reply({ embeds: [errorEmbed('You cannot log a mistake against this user.')], ephemeral: true }); return; }
 
-  // Fetch severity guide from DB (falls back to defaults if not set)
+  // Missed Quota — show dropdown first
+  if (severity === 'quota') {
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`quota_sel:${target.id}`)
+      .setPlaceholder('How much of their quota did they complete?')
+      .addOptions(
+        new StringSelectMenuOptionBuilder()
+          .setLabel('More than 50% complete')
+          .setDescription('Moderate mistake — submitted over half their quota')
+          .setValue('quota_moderate'),
+        new StringSelectMenuOptionBuilder()
+          .setLabel('Less than 50% complete')
+          .setDescription('Severe mistake — submitted less than half their quota')
+          .setValue('quota_severe'),
+      );
+
+    const msg = await i.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(Colors.Orange)
+        .setTitle('Missed Quota')
+        .setDescription(`How much of their quota did <@${target.id}> complete today?\n\n- **More than 50%** - Moderate mistake\n- **Less than 50%** - Severe mistake`)
+        .setTimestamp()],
+      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+      ephemeral: true,
+    });
+
+    const sel = await msg.awaitMessageComponent({
+      componentType: ComponentType.StringSelect,
+      filter: s => s.user.id === i.user.id && s.customId === `quota_sel:${target.id}`,
+      time: 30_000,
+    }).catch(() => null);
+
+    if (!sel) { await i.editReply({ content: 'Timed out.', embeds: [], components: [] }); return; }
+
+    const quotaType = sel.values[0]; // 'quota_moderate' or 'quota_severe'
+    const resolvedSeverity = quotaType === 'quota_severe' ? 'severe' : 'moderate';
+    const today = new Date().toISOString().split('T')[0];
+
+    await sel.showModal({
+      customId: `log_mistake:${target.id}:${resolvedSeverity}:quota`,
+      title: `Missed Quota — ${resolvedSeverity === 'severe' ? 'Severe' : 'Moderate'}`,
+      components: [
+        { type: 1, components: [{ type: 4, customId: 'post_id', label: 'Date of missed quota (YYYY-MM-DD)', style: 1, required: true, maxLength: 10, value: today }] },
+        { type: 1, components: [{ type: 4, customId: 'date', label: 'Date (YYYY-MM-DD)', style: 1, required: true, value: today }] },
+        { type: 1, components: [{ type: 4, customId: 'reason', label: 'Additional notes (optional)', style: 2, required: false, maxLength: 1000, placeholder: 'e.g. Submitted 3 out of 10 required logs' }] },
+      ]
+    });
+
+    await i.editReply({ content: 'Fill in the modal to complete the log.', embeds: [], components: [] });
+    return;
+  }
+
+  // Normal severity — fetch severity guide and show it
   const guideRows = await sql`SELECT * FROM severity_guide WHERE id = 1`;
   const guide = guideRows[0] ?? {
-    minor:    'Minor - Small formatting issues, missing non-critical information, minor rule violations with low impact.',
-    moderate: 'Moderate - Clear rule violations, missing required proof, incorrect category, invalid payment range.',
-    severe:   'Severe - Stolen/AI-generated assets, prohibited services, scripting violations, repeat offences, significant fraud indicators.',
+    minor:    'Outcome was correct but execution was slightly off.',
+    moderate: 'Wrong outcome reached or a required process was not followed.',
+    severe:   'PA approved something that should never have passed.',
   };
 
   const guideEmbed = new EmbedBuilder()
@@ -55,7 +112,6 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     ephemeral: true,
   });
 
-  // Wait for Continue click, then show modal
   const btn = await msg.awaitMessageComponent({
     componentType: ComponentType.Button,
     filter: b => b.user.id === i.user.id && b.customId === 'sev_guide_continue',
