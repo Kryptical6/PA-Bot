@@ -10,6 +10,7 @@ import { checkFeedbackReminders } from '../services/feedbackService';
 import { sendDailyReminders, runAuditChecks } from '../services/spaAuditService';
 import { checkWeeklyReportSchedule } from '../services/weeklyReportService';
 import { checkExpiredSessions } from '../services/logSessionService';
+import { dmUser } from '../services/dmService';
 
 async function runAll(client: Client): Promise<void> {
   try {
@@ -27,6 +28,7 @@ async function runAll(client: Client): Promise<void> {
     await checkUnreadWarnings(client);
     await checkExpiredSessions(client);
     await fireReminders(client);
+    await checkAutoTagSends(client);
   } catch (e) { console.error('Scheduler error:', e); }
 }
 
@@ -91,6 +93,70 @@ async function runStartupOnly(client: Client): Promise<void> {
     await cancelExpiredAssessmentSessions(client);
     await runAuditChecks(client);
   } catch (e) { console.error('Startup check error:', e); }
+}
+
+async function checkAutoTagSends(client: Client): Promise<void> {
+  // Only run once per day at midnight UTC
+  if (new Date().getUTCHours() !== 0) return;
+
+  try {
+    const sessions = await sql`
+      SELECT a.*, t.name as tag_name, t.content as tag_content
+      FROM tag_role_auto a
+      JOIN tags t ON a.tag_id = t.id
+      WHERE a.active = true
+    `;
+
+    if (sessions.length === 0) return;
+
+    const guild = (client as any).guilds?.cache?.first();
+    if (!guild) return;
+    await guild.members.fetch();
+
+    const summaryLines: string[] = [];
+
+    for (const session of sessions) {
+      const members = guild.members.cache.filter((mb: any) =>
+        mb.roles.cache.has(session.role_id) && !mb.user.bot
+      );
+
+      // Find members who haven't been sent this session's tag yet
+      const alreadySent = await sql`
+        SELECT user_id FROM tag_role_sent WHERE session_id = ${session.session_id}
+      `;
+      const sentIds = new Set(alreadySent.map((r: any) => r.user_id));
+
+      const newMembers = [...members.values()].filter((mb: any) => !sentIds.has(mb.id));
+      if (newMembers.length === 0) continue;
+
+      let sent = 0;
+      for (const member of newMembers) {
+        const result = await dmUser(client, member.id, { content: session.tag_content });
+        if (result) {
+          sent++;
+          await sql`
+            INSERT INTO tag_role_sent (session_id, tag_id, role_id, user_id)
+            VALUES (${session.session_id}, ${session.tag_id}, ${session.role_id}, ${member.id})
+            ON CONFLICT DO NOTHING
+          `;
+        }
+      }
+
+      if (sent > 0) {
+        summaryLines.push(`**${session.session_id}** - Tag: ${session.tag_name} | Role: <@&${session.role_id}> | New users DM'd: **${sent}**`);
+      }
+    }
+
+    if (summaryLines.length > 0) {
+      const ch = await client.channels.fetch('1497723319829401750') as TextChannel;
+      const embed = new EmbedBuilder()
+        .setColor(Colors.Blue)
+        .setTitle('Daily Auto-Send Summary')
+        .setDescription(summaryLines.join('\n'))
+        .setTimestamp();
+      await ch.send({ embeds: [embed] });
+    }
+  } catch (e) { console.error('Auto tag send error:', e); }
 }
 
 export const startScheduler = (client: Client) => setInterval(() => runAll(client), 60 * 60 * 1000);

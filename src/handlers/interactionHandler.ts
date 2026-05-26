@@ -133,6 +133,21 @@ async function handleButton(i: any): Promise<void> {
   const escalationActions = ['esc_claim', 'esc_withdraw', 'esc_handle', 'esc_reject', 'esc_escalate_hpa', 'esc_add_note', 'esc_show_notes'];
   if (escalationActions.includes(action)) { await handleEscalationButton(i, action, rest); return; }
 
+  // Auto tag deactivate button
+  if (action === 'auto_tag_deactivate') {
+    const m = i.member as GuildMember;
+    if (!isSPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
+    const sessionId = rest[0];
+    const [session] = await sql`SELECT * FROM tag_role_auto WHERE session_id = ${sessionId}`;
+    if (!session) { await i.reply({ embeds: [errorEmbed('Session not found.')], ephemeral: true }); return; }
+    await sql`UPDATE tag_role_auto SET active = false, deactivated_at = NOW(), deactivated_by = ${i.user.id} WHERE session_id = ${sessionId}`;
+    await i.update({
+      embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Session Deactivated').setDescription(`Auto-send session **${sessionId}** has been deactivated.\nNo further users will be DM'd for this session.`).setTimestamp()],
+      components: [],
+    });
+    return;
+  }
+
   // Warning read receipt
   if (action === 'warn_read') { await handleWarnRead(i, rest); return; }
 
