@@ -29,7 +29,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   if (!target) { await i.reply({ embeds: [errorEmbed('User not found.')], ephemeral: true }); return; }
   if (!canLogAgainst(m, target)) { await i.reply({ embeds: [errorEmbed('You cannot log a mistake against this user.')], ephemeral: true }); return; }
 
-  // Missed Quota - show dropdown first
+  // ── Missed Quota ─────────────────────────────────────────────────────────────
   if (severity === 'quota') {
     const select = new StringSelectMenuBuilder()
       .setCustomId(`quota_sel:${target.id}`)
@@ -45,7 +45,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
           .setValue('quota_severe'),
       );
 
-    const msg = await i.reply({
+    await i.reply({
       embeds: [new EmbedBuilder()
         .setColor(Colors.Orange)
         .setTitle('Missed Quota')
@@ -57,8 +57,10 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
         .setTimestamp()],
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
       ephemeral: true,
+      fetchReply: true,
     });
 
+    const msg = await i.fetchReply();
     const sel = await msg.awaitMessageComponent({
       componentType: ComponentType.StringSelect,
       filter: s => s.user.id === i.user.id && s.customId === `quota_sel:${target.id}`,
@@ -67,9 +69,8 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
     if (!sel) { await i.editReply({ content: 'Timed out.', embeds: [], components: [] }); return; }
 
-    const quotaType        = sel.values[0];
-    const resolvedSeverity = quotaType === 'quota_severe' ? 'severe' : 'moderate';
-    const today            = new Date().toISOString().split('T')[0];
+    const resolvedSeverity = sel.values[0] === 'quota_severe' ? 'severe' : 'moderate';
+    const today = new Date().toISOString().split('T')[0];
 
     await sel.showModal({
       customId: `log_mistake:${target.id}:${resolvedSeverity}:quota`,
@@ -85,7 +86,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     return;
   }
 
-  // Normal severity - fetch severity guide and show it
+  // ── Normal severity - fetch guide and show ────────────────────────────────────
   const guideRows = await sql`SELECT * FROM severity_guide WHERE id = 1`;
   const guide = guideRows[0] ?? {
     minor:    'Outcome was correct but execution was slightly off.',
@@ -110,12 +111,14 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     .setLabel(`Continue with ${severity.charAt(0).toUpperCase() + severity.slice(1)}`)
     .setStyle(severity === 'minor' ? ButtonStyle.Secondary : severity === 'moderate' ? ButtonStyle.Primary : ButtonStyle.Danger);
 
-  const msg = await i.reply({
+  await i.reply({
     embeds: [guideEmbed],
     components: [new ActionRowBuilder<ButtonBuilder>().addComponents(continueBtn)],
     ephemeral: true,
+    fetchReply: true,
   });
 
+  const msg = await i.fetchReply();
   const btn = await msg.awaitMessageComponent({
     componentType: ComponentType.Button,
     filter: b => b.user.id === i.user.id && b.customId === 'sev_guide_continue',
