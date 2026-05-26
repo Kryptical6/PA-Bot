@@ -28,7 +28,6 @@ async function runAll(client: Client): Promise<void> {
     await checkUnreadWarnings(client);
     await checkExpiredSessions(client);
     await fireReminders(client);
-    await checkAutoTagSends(client);
   } catch (e) { console.error('Scheduler error:', e); }
 }
 
@@ -96,9 +95,6 @@ async function runStartupOnly(client: Client): Promise<void> {
 }
 
 async function checkAutoTagSends(client: Client): Promise<void> {
-  // Only run once per day at midnight UTC
-  if (new Date().getUTCHours() !== 0) return;
-
   try {
     const sessions = await sql`
       SELECT a.*, t.name as tag_name, t.content as tag_content
@@ -160,6 +156,7 @@ async function checkAutoTagSends(client: Client): Promise<void> {
 }
 
 export const startScheduler = (client: Client) => setInterval(() => runAll(client), 60 * 60 * 1000);
+export const startMinuteScheduler = (client: Client) => setInterval(() => checkAutoTagSends(client), 60 * 1000);
 export const runStartupChecks = async (client: Client) => {
   console.log('Running startup checks...');
   await runStartupOnly(client);

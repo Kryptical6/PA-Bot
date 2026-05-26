@@ -1,5 +1,5 @@
 import { Client } from 'discord.js';
-import { runStartupChecks, startScheduler } from '../utils/scheduler';
+import { runStartupChecks, startScheduler, startMinuteScheduler } from '../utils/scheduler';
 import { sql } from '../database/client';
 
 export async function onReady(client: Client): Promise<void> {
@@ -12,4 +12,5 @@ export async function onReady(client: Client): Promise<void> {
   }
   await runStartupChecks(client);
   startScheduler(client);
+  startMinuteScheduler(client);
 }
