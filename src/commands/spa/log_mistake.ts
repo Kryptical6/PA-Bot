@@ -1,7 +1,8 @@
 import {
   ChatInputCommandInteraction, SlashCommandBuilder, GuildMember,
   EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder,
-  ComponentType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder
+  ComponentType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
+  InteractionCollector
 } from 'discord.js';
 import { isSPA, canLogAgainst } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
@@ -28,6 +29,8 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   if (!target) { await i.reply({ embeds: [errorEmbed('User not found.')], ephemeral: true }); return; }
   if (!canLogAgainst(m, target)) { await i.reply({ embeds: [errorEmbed('You cannot log a mistake against this user.')], ephemeral: true }); return; }
+
+  const today = new Date().toISOString().split('T')[0];
 
   // ── Missed Quota ─────────────────────────────────────────────────────────────
   if (severity === 'quota') {
@@ -57,20 +60,28 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
         .setTimestamp()],
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
       ephemeral: true,
-      fetchReply: true,
     });
 
-    const msg = await i.fetchReply();
-    const sel = await msg.awaitMessageComponent({
-      componentType: ComponentType.StringSelect,
-      filter: s => s.user.id === i.user.id && s.customId === `quota_sel:${target.id}`,
-      time: 30_000,
-    }).catch(() => null);
+    // Use interactionCreate collector on the client instead of awaitMessageComponent
+    const sel = await new Promise<any>((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 30_000);
+      const handler = async (interaction: any) => {
+        if (
+          interaction.isStringSelectMenu() &&
+          interaction.user.id === i.user.id &&
+          interaction.customId === `quota_sel:${target.id}`
+        ) {
+          clearTimeout(timeout);
+          i.client.off('interactionCreate', handler);
+          resolve(interaction);
+        }
+      };
+      i.client.on('interactionCreate', handler);
+    });
 
     if (!sel) { await i.editReply({ content: 'Timed out.', embeds: [], components: [] }); return; }
 
     const resolvedSeverity = sel.values[0] === 'quota_severe' ? 'severe' : 'moderate';
-    const today = new Date().toISOString().split('T')[0];
 
     await sel.showModal({
       customId: `log_mistake:${target.id}:${resolvedSeverity}:quota`,
@@ -86,7 +97,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     return;
   }
 
-  // ── Normal severity - fetch guide and show ────────────────────────────────────
+  // ── Normal severity - show guide then open modal ──────────────────────────────
   const guideRows = await sql`SELECT * FROM severity_guide WHERE id = 1`;
   const guide = guideRows[0] ?? {
     minor:    'Outcome was correct but execution was slightly off.',
@@ -107,7 +118,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     .setTimestamp();
 
   const continueBtn = new ButtonBuilder()
-    .setCustomId('sev_guide_continue')
+    .setCustomId(`sev_guide_continue:${target.id}:${severity}`)
     .setLabel(`Continue with ${severity.charAt(0).toUpperCase() + severity.slice(1)}`)
     .setStyle(severity === 'minor' ? ButtonStyle.Secondary : severity === 'moderate' ? ButtonStyle.Primary : ButtonStyle.Danger);
 
@@ -115,19 +126,27 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     embeds: [guideEmbed],
     components: [new ActionRowBuilder<ButtonBuilder>().addComponents(continueBtn)],
     ephemeral: true,
-    fetchReply: true,
   });
 
-  const msg = await i.fetchReply();
-  const btn = await msg.awaitMessageComponent({
-    componentType: ComponentType.Button,
-    filter: b => b.user.id === i.user.id && b.customId === 'sev_guide_continue',
-    time: 30_000,
-  }).catch(() => null);
+  // Listen for the continue button via interactionCreate
+  const btn = await new Promise<any>((resolve) => {
+    const timeout = setTimeout(() => resolve(null), 60_000);
+    const handler = async (interaction: any) => {
+      if (
+        interaction.isButton() &&
+        interaction.user.id === i.user.id &&
+        interaction.customId === `sev_guide_continue:${target.id}:${severity}`
+      ) {
+        clearTimeout(timeout);
+        i.client.off('interactionCreate', handler);
+        resolve(interaction);
+      }
+    };
+    i.client.on('interactionCreate', handler);
+  });
 
   if (!btn) { await i.editReply({ content: 'Timed out.', embeds: [], components: [] }); return; }
 
-  const today = new Date().toISOString().split('T')[0];
   await btn.showModal({
     customId: `log_mistake:${target.id}:${severity}`,
     title: `Log a ${severity.charAt(0).toUpperCase() + severity.slice(1)} Mistake`,
