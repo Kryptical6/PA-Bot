@@ -94,7 +94,11 @@ async function runStartupOnly(client: Client): Promise<void> {
   } catch (e) { console.error('Startup check error:', e); }
 }
 
+let autoTagRunning = false;
+
 async function checkAutoTagSends(client: Client): Promise<void> {
+  if (autoTagRunning) return;
+  autoTagRunning = true;
   try {
     const sessions = await sql`
       SELECT a.*, t.name as tag_name, t.content as tag_content
@@ -152,11 +156,11 @@ async function checkAutoTagSends(client: Client): Promise<void> {
         .setTimestamp();
       await ch.send({ embeds: [embed] });
     }
-  } catch (e) { console.error('Auto tag send error:', e); }
+  } catch (e) { console.error('Auto tag send error:', e); } finally { autoTagRunning = false; }
 }
 
 export const startScheduler = (client: Client) => setInterval(() => runAll(client), 60 * 60 * 1000);
-export const startMinuteScheduler = (client: Client) => setInterval(() => checkAutoTagSends(client), 60 * 1000);
+export const startMinuteScheduler = (client: Client) => setInterval(() => { checkAutoTagSends(client).catch(e => console.error('Auto tag error:', e)); }, 60 * 1000);
 export const runStartupChecks = async (client: Client) => {
   console.log('Running startup checks...');
   await runStartupOnly(client);
