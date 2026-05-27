@@ -13,6 +13,7 @@ import { data as escalate }         from './commands/shared/escalate';
 import { data as myEscalations }    from './commands/shared/my_escalations';
 import { data as suggest }          from './commands/shared/suggest';
 import { data as remind }           from './commands/shared/remind';
+import { data as botBug }           from './commands/shared/bot_bug';
 
 // SPA
 import { data as logMistake }       from './commands/spa/log_mistake';
@@ -61,7 +62,7 @@ import { data as viewReportStatus }         from './commands/hpa/view_report_sta
 const commands = [
   // Shared
   help, myLogs, appeal, tag, tagSearch, paAssessment,
-  escalate, myEscalations, suggest, remind,
+  escalate, myEscalations, suggest, remind, botBug,
   // SPA
   logMistake, staffProfile, staffOverview, lookupPost, warnUser,
   createVote, listAssessments, spaQuota, setReminder, sendTag,

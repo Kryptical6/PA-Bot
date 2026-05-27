@@ -18,6 +18,7 @@ import * as tagSearch from '../commands/shared/tag_search';
 import * as paAssessment from '../commands/shared/pa_assessment';
 import * as logMistake from '../commands/spa/log_mistake';
 import * as staffProfile from '../commands/spa/staff_profile';
+import { buildProfileEmbed, buildProfileRow } from '../commands/spa/staff_profile';
 import * as staffOverview from '../commands/spa/staff_overview';
 import * as lookupPost from '../commands/spa/lookup_post';
 import * as warnUser from '../commands/spa/warn_user';
@@ -49,12 +50,14 @@ import * as configureAudit from '../commands/hpa/configure_audit';
 import * as clearSpaFlag from '../commands/hpa/clear_spa_flag';
 import * as suggest from '../commands/shared/suggest';
 import * as remind from '../commands/shared/remind';
+import * as botBug from '../commands/shared/bot_bug';
 import * as searchSuggestions from '../commands/spa/search_suggestions';
 import { buildFeedbackEmbed, buildFeedbackRow, buildResponseEmbed, buildSubmittedEmbed } from '../services/feedbackService';
 import { buildSuggestionEmbed, buildPendingSuggestionRow, buildConsideredRow } from '../commands/shared/suggest';
 import { getOrCreateDailyLog, getConfig, BEHAVIOUR_FLAGS } from '../services/spaAuditService';
 import { startLogSession, updateSessionDM, closeSession, postSessionSummary, buildSessionEmbed, buildSessionButtons } from '../services/logSessionService';
 import { buildStrikeRolePrompt, syncStrikeRole, getActiveStrikeCount } from '../services/strikeRoleService';
+import { generateErrorCode, logError } from '../services/errorService';
 import * as cancelGameNight from '../commands/hpa/cancel_game_night';
 import * as deleteSuggestion from '../commands/hpa/delete_suggestion';
 import * as clearStale from '../commands/hpa/clear_stale';
@@ -77,7 +80,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   create_embed: createEmbed, edit_embed: editEmbed,
   suggest, search_suggestions: searchSuggestions,
   set_reminder: setReminder, send_tag: sendTag,
-  remind,
+  remind, 'bot-bug': botBug,
   import_assessment_questions: importAssessmentQ,
   escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,
@@ -109,14 +112,25 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
     } else if (interaction.isModalSubmit()) {
       await handleModal(interaction as any);
     }
-  } catch (err) {
-    console.error('Interaction error:', err);
+  } catch (err: any) {
+    const code    = generateErrorCode();
+    const command = (interaction as any).commandName ?? (interaction as any).customId ?? 'unknown';
+    const userId  = (interaction as any).user?.id ?? 'unknown';
+    const guildId = (interaction as any).guildId ?? undefined;
+    const message = err?.message ?? String(err);
+    const stack   = err?.stack;
+
+    console.error(`[${code}] Interaction error in ${command}:`, err);
+    await logError({ code, command, userId, guildId, message, stack }).catch(() => {});
+
     try {
-      const isDM = !(interaction as any).guild;
-      const msg = { content: 'An error occurred.', ephemeral: !isDM };
-      if ((interaction as any).replied) return;
-      if ((interaction as any).deferred) await (interaction as any).editReply(msg);
-      else if ((interaction as any).reply) await (interaction as any).reply(msg);
+      const isDM  = !(interaction as any).guild;
+      const reply = { content: `An error occurred. Error code: **${code}**\nUse \`/bot-bug code:${code}\` to report this.`, ephemeral: !isDM };
+      if ((interaction as any).replied || (interaction as any).deferred) {
+        await (interaction as any).editReply(reply).catch(() => {});
+      } else if ((interaction as any).reply) {
+        await (interaction as any).reply(reply).catch(() => {});
+      }
     } catch { /* silent */ }
   }
 }
@@ -124,6 +138,11 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
 // ─── BUTTON HANDLER ───────────────────────────────────────────────────────────
 async function handleButton(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
+
+  // Staff profile pagination buttons
+  if (action === 'sp_next' || action === 'sp_prev' || action === 'sp_all_mistakes' || action === 'sp_back') {
+    await handleStaffProfileButton(i, action, rest); return;
+  }
 
   // Game night buttons
   const gameNightActions = ['gs_approve', 'gs_deny', 'gs_upvote', 'gn_rsvp', 'gn_list', 'gn_rate'];
@@ -2477,6 +2496,75 @@ async function handleStrikeRoleButton(i: any, action: string, rest: string[]): P
       components: [],
     });
   }
+}
+
+// ─── STAFF PROFILE BUTTONS ───────────────────────────────────────────────────
+async function handleStaffProfileButton(i: any, action: string, rest: string[]): Promise<void> {
+  const PAGE = 5;
+  const m = i.member as GuildMember;
+
+  if (action === 'sp_all_mistakes') {
+    const targetId = rest[0];
+    const page     = parseInt(rest[1]) || 0;
+    const allMistakes = await sql`SELECT * FROM logs WHERE user_id = ${targetId} AND type = 'mistake' AND expires_at > NOW() ORDER BY date DESC`;
+    const allPages    = Math.max(1, Math.ceil(allMistakes.length / PAGE));
+    const slice       = allMistakes.slice(page * PAGE, (page + 1) * PAGE);
+
+    const embed = new EmbedBuilder()
+      .setColor(Colors.Orange)
+      .setTitle('All Mistakes')
+      .setDescription(`All non-expired mistakes including converted ones. Total: ${allMistakes.length}`)
+      .setFooter({ text: `Page ${page + 1}/${allPages}` })
+      .setTimestamp();
+
+    if (slice.length > 0) {
+      embed.addFields({ name: 'Mistakes', value: slice.map((e: any) => {
+        const sev       = e.severity ? `[${e.severity.charAt(0).toUpperCase() + e.severity.slice(1)}] ` : '';
+        const converted = e.converted_to_strike ? ' - Converted to Strike' : '';
+        const logger    = isHPA(m) ? `\nLogged by <@${e.logged_by}>` : '';
+        return `**${e.post_id ?? 'N/A'}** ${sev}${converted}\n${e.reason}\nExpires <t:${Math.floor(new Date(e.expires_at).getTime() / 1000)}:R>${logger}`;
+      }).join('\n\n') });
+    }
+
+    const navBtns: ButtonBuilder[] = [];
+    if (page > 0) navBtns.push(new ButtonBuilder().setCustomId(`sp_all_mistakes:${targetId}:${page - 1}`).setLabel('Previous').setStyle(ButtonStyle.Secondary));
+    if (page + 1 < allPages) navBtns.push(new ButtonBuilder().setCustomId(`sp_all_mistakes:${targetId}:${page + 1}`).setLabel('Next').setStyle(ButtonStyle.Secondary));
+    navBtns.push(new ButtonBuilder().setCustomId(`sp_back:${targetId}:0:0`).setLabel('Back to Profile').setStyle(ButtonStyle.Secondary));
+    await i.update({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(...navBtns)] });
+    return;
+  }
+
+  // sp_next, sp_prev, sp_back — need to re-fetch the target member
+  const targetId = rest[0];
+  let mp = parseInt(rest[1]) || 0;
+  let sp = parseInt(rest[2]) || 0;
+
+  const guild  = i.guild;
+  const target = await guild?.members.fetch(targetId).catch(() => null);
+  if (!target) { await i.update({ content: 'Member not found.', components: [] }); return; }
+
+  const logs        = await sql`SELECT * FROM logs WHERE user_id = ${targetId} AND expires_at > NOW() AND (converted_to_strike = false OR converted_to_strike IS NULL) ORDER BY date DESC`;
+  const mistakes    = logs.filter((l: any) => l.type === 'mistake');
+  const strikes     = logs.filter((l: any) => l.type === 'strike');
+  const allMistakes = await sql`SELECT * FROM logs WHERE user_id = ${targetId} AND type = 'mistake' AND expires_at > NOW() ORDER BY date DESC`;
+  const converted   = allMistakes.filter((l: any) => l.converted_to_strike).length;
+  const mPages      = Math.max(1, Math.ceil(mistakes.length / PAGE));
+  const sPages      = Math.max(1, Math.ceil(strikes.length / PAGE));
+  const showBy      = isHPA(m);
+
+  if (action === 'sp_next') {
+    if (mp + 1 < mPages) mp++;
+    if (sp + 1 < sPages) sp++;
+  } else if (action === 'sp_prev') {
+    if (mp > 0) mp--;
+    if (sp > 0) sp--;
+  } else if (action === 'sp_back') {
+    mp = 0; sp = 0;
+  }
+
+  const embed = buildProfileEmbed(target, logs, mistakes, strikes, converted, mp, sp, mPages, sPages, showBy);
+  const row   = buildProfileRow(targetId, mp, sp, mPages, sPages, allMistakes.length);
+  await i.update({ embeds: [embed], components: row ? [row] : [] });
 }
 
 async function checkStrikeAlert(client: any, userId: string): Promise<void> {
