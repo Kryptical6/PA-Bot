@@ -33,7 +33,7 @@ import * as editGameNight from '../commands/spa/edit_game_night';
 import * as escalate from '../commands/shared/escalate';
 import * as myEscalations from '../commands/shared/my_escalations';
 import * as viewEscalations from '../commands/spa/view_escalations';
-import { buildEscalationEmbed, buildPendingRow, buildClaimedRow } from '../commands/shared/escalate';
+import { buildEscalationEmbed, buildPendingRow, buildClaimedRow, buildOutcomeSelect, OUTCOME_LABELS, ACTION_LABELS } from '../commands/shared/escalate';
 import * as setReminder from '../commands/spa/set_reminder';
 import * as sendTag from '../commands/spa/send_tag';
 import * as importAssessmentQ from '../commands/hpa/import_assessment_questions';
@@ -738,12 +738,28 @@ async function handleEscalationButton(i: any, action: string, rest: string[]): P
     if (e.status !== 'claimed' && e.status !== 'escalated_hpa') { await i.reply({ embeds: [errorEmbed('This escalation is not claimed.')], ephemeral: true }); return; }
     if (!isClaimer && !isHPA(m)) { await i.reply({ content: 'Only the claimer or HPA can resolve this.', ephemeral: true }); return; }
 
-    const newStatus = action === 'esc_handle' ? 'handled' : 'rejected';
-    await i.showModal({
-      customId: `esc_resolve_modal:${escalationId}:${newStatus}`,
-      title: action === 'esc_handle' ? 'Resolve - Handled' : 'Resolve - Rejected',
-      components: [{ type: 1, components: [{ type: 4, customId: 'notes', label: 'Resolution notes (required)', style: 2, required: true, minLength: 5, maxLength: 1000 }] }]
-    });
+    if (action === 'esc_handle') {
+      // Show outcome dropdown - includes post ID for reference
+      const embed = new EmbedBuilder()
+        .setColor(Colors.Blue)
+        .setTitle('Select Outcome')
+        .setDescription(`Select the outcome for this escalation.\n\n**Post ID:** \`${e.post_id}\`\n**Action:** ${ACTION_LABELS[e.action] ?? e.action}\n**Submitted by:** <@${e.submitted_by}>`)
+        .setFooter({ text: `Escalation ID: ${e.id}` })
+        .setTimestamp();
+
+      await i.reply({
+        embeds: [embed],
+        components: [buildOutcomeSelect(escalationId, e.action)],
+        ephemeral: true,
+      });
+    } else {
+      // esc_reject - open modal directly
+      await i.showModal({
+        customId: `esc_resolve_modal:${escalationId}:rejected`,
+        title: 'Resolve - Rejected',
+        components: [{ type: 1, components: [{ type: 4, customId: 'notes', label: 'Resolution notes (required)', style: 2, required: true, minLength: 5, maxLength: 1000 }] }]
+      });
+    }
   }
 
   else if (action === 'esc_escalate_hpa') {
@@ -1277,6 +1293,62 @@ async function handleSuggestionButton(i: any, action: string, rest: string[]): P
 
 async function handleSelect(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
+
+  if (action === 'esc_outcome_sel') {
+    const escalationId = parseInt(rest[0]);
+    const outcome      = i.values[0];
+    const [e] = await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`;
+    if (!e) { await i.reply({ embeds: [errorEmbed('Escalation not found.')], ephemeral: true }); return; }
+
+    // Outcomes needing a modal for notes
+    if (outcome === 'accepted_other' || outcome === 'denied') {
+      await i.showModal({
+        customId: `esc_outcome_modal:${escalationId}:${outcome}`,
+        title: outcome === 'denied' ? 'Denial Reason' : 'Punishment Details',
+        components: [{ type: 1, components: [{ type: 4, customId: 'notes', label: outcome === 'denied' ? 'Reason for denial' : 'Punishment given', style: 2, required: true, minLength: 5, maxLength: 1000 }] }]
+      });
+      return;
+    }
+
+    // accepted_banned - no modal needed
+    if (outcome === 'accepted_banned') {
+      await i.deferUpdate();
+      const notes = `Accepted - User Banned`;
+      await sql`UPDATE post_escalations SET status = 'handled', resolution_notes = ${notes}, updated_at = NOW() WHERE id = ${escalationId}`;
+      const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
+
+      // Update embed
+      try { await i.message.edit({ embeds: [buildEscalationEmbed(updated)], components: [] }); } catch { /* silent */ }
+
+      // DM logger
+      await safeDM(i.client, e.submitted_by, new EmbedBuilder()
+        .setColor(Colors.Green)
+        .setTitle('Escalation Handled')
+        .setDescription(`Your punishment request for post \`${e.post_id}\` has been accepted.\n\n**Outcome:** User Banned\n\nYou may now unsuspend and deny post \`${e.post_id}\`.`)
+        .setTimestamp(), 'escalation handled');
+
+      await i.editReply({ content: `Outcome recorded: **Accepted - User Banned**. Logger has been notified.`, embeds: [], components: [] });
+      return;
+    }
+
+    // All other outcomes (approved, escalated, role_revoked, role_kept, takeover_resolved, takeover_pending, no_action)
+    await i.deferUpdate();
+    const label = OUTCOME_LABELS[outcome] ?? outcome;
+    await sql`UPDATE post_escalations SET status = 'handled', resolution_notes = ${label}, updated_at = NOW() WHERE id = ${escalationId}`;
+    const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
+
+    try { await i.message.edit({ embeds: [buildEscalationEmbed(updated)], components: [] }); } catch { /* silent */ }
+
+    // DM logger
+    await safeDM(i.client, e.submitted_by, new EmbedBuilder()
+      .setColor(Colors.Green)
+      .setTitle('Escalation Handled')
+      .setDescription(`Your escalation for post \`${e.post_id}\` has been handled.\n\n**Outcome:** ${label}`)
+      .setTimestamp(), 'escalation handled');
+
+    await i.editReply({ content: `Outcome recorded: **${label}**.`, embeds: [], components: [] });
+    return;
+  }
 
   if (action === 'audit_flag_type') {
     const targetId  = rest[0];
@@ -1931,6 +2003,48 @@ async function handleModal(i: any): Promise<void> {
     } catch (e) { console.error('Failed to post escalation:', e); }
 
     await i.editReply({ embeds: [successEmbed('Escalation Submitted', `Your escalation for post \`${postId}\` has been submitted.`)] });
+  }
+
+  else if (action === 'esc_outcome_modal') {
+    const escalationId = parseInt(rest[0]);
+    const outcome      = rest[1];
+    const notes        = i.fields.getTextInputValue('notes').trim();
+    await i.deferReply({ ephemeral: true });
+
+    const [e] = await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`;
+    if (!e) { await i.editReply({ embeds: [errorEmbed('Not found.')] }); return; }
+
+    const label = OUTCOME_LABELS[outcome] ?? outcome;
+    const resolutionNotes = `${label}: ${notes}`;
+
+    await sql`UPDATE post_escalations SET status = 'handled', resolution_notes = ${resolutionNotes}, updated_at = NOW() WHERE id = ${escalationId}`;
+    const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
+
+    // Update embed in escalations channel
+    if (e.message_id) {
+      try {
+        const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
+        const msg = await ch.messages.fetch(e.message_id);
+        await msg.edit({ embeds: [buildEscalationEmbed(updated)], components: [] });
+      } catch { /* silent */ }
+    }
+
+    // DM logger based on outcome
+    if (outcome === 'denied') {
+      await safeDM(i.client, e.submitted_by, new EmbedBuilder()
+        .setColor(Colors.Red)
+        .setTitle('Escalation Denied')
+        .setDescription(`Your escalation for post \`${e.post_id}\` was denied.\n\n\`\`\`${notes}\`\`\``)
+        .setTimestamp(), 'escalation denied');
+    } else if (outcome === 'accepted_other') {
+      await safeDM(i.client, e.submitted_by, new EmbedBuilder()
+        .setColor(Colors.Green)
+        .setTitle('Escalation Handled')
+        .setDescription(`Your escalation for post \`${e.post_id}\` has been handled.\n\n**Punishment given:** ${notes}`)
+        .setTimestamp(), 'escalation handled');
+    }
+
+    await i.editReply({ content: `Outcome recorded: **${label}**. Logger has been notified.` });
   }
 
   else if (action === 'esc_resolve_modal') {

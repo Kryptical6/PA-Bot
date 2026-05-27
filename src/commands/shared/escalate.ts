@@ -55,6 +55,52 @@ export function buildClaimedRow(escalationId: number): ActionRowBuilder<ButtonBu
   );
 }
 
+export function buildOutcomeSelect(escalationId: number, action: string): ActionRowBuilder<StringSelectMenuBuilder> {
+  const opts: Record<string, { label: string; description: string; value: string }[]> = {
+    punishment_request: [
+      { label: 'Accepted - User Banned',  description: 'User has been banned. Logger will be told to unsuspend/deny.',            value: 'accepted_banned' },
+      { label: 'Accepted - Other',        description: 'Punishment given. Provide details via modal.',                           value: 'accepted_other' },
+      { label: 'Denied',                  description: 'Request denied. Provide reason via modal.',                              value: 'denied' },
+    ],
+    review_post: [
+      { label: 'Approved',                description: 'Post was reviewed and approved.',                                        value: 'approved' },
+      { label: 'Denied',                  description: 'Post was reviewed and denied.',                                          value: 'denied' },
+      { label: 'Escalated to HPA',        description: 'Requires further HPA decision.',                                         value: 'escalated' },
+    ],
+    revoke_skill_role: [
+      { label: 'Role Revoked',             description: 'Skill role has been removed.',                                          value: 'role_revoked' },
+      { label: 'Role Kept',               description: 'Reviewed - role will be kept.',                                         value: 'role_kept' },
+      { label: 'Escalated to HPA',        description: 'Requires further HPA decision.',                                         value: 'escalated' },
+    ],
+    takeover_post: [
+      { label: 'Taken Over - Resolved',   description: 'Post taken over and resolved.',                                         value: 'takeover_resolved' },
+      { label: 'Taken Over - Pending',    description: 'Post taken over, still pending action.',                                 value: 'takeover_pending' },
+      { label: 'No Action Needed',        description: 'Reviewed - no takeover required.',                                      value: 'no_action' },
+    ],
+  };
+
+  const options = opts[action] ?? opts['review_post'];
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`esc_outcome_sel:${escalationId}`)
+    .setPlaceholder('Select the outcome')
+    .addOptions(options.map(o => new StringSelectMenuOptionBuilder().setLabel(o.label).setDescription(o.description).setValue(o.value)));
+
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+}
+
+export const OUTCOME_LABELS: Record<string, string> = {
+  accepted_banned:    'Accepted - User Banned',
+  accepted_other:     'Accepted - Other',
+  denied:             'Denied',
+  approved:           'Approved',
+  escalated:          'Escalated to HPA',
+  role_revoked:       'Role Revoked',
+  role_kept:          'Role Kept',
+  takeover_resolved:  'Taken Over - Resolved',
+  takeover_pending:   'Taken Over - Pending',
+  no_action:          'No Action Needed',
+};
+
 export const data = new SlashCommandBuilder()
   .setName('escalate')
   .setDescription('Escalate a post to a senior for review');
