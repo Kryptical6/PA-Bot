@@ -1488,55 +1488,51 @@ async function handleModal(i: any): Promise<void> {
     const targetId   = rest[0];
     const severity   = rest[1] ?? 'minor';
     const isQuota    = rest[2] === 'quota';
-    const date       = i.fields.getTextInputValue('post_id').trim(); // quota reuses this field for date
-    const postId     = isQuota ? `QUOTA-${date}` : date;
-    const logDate    = i.fields.getTextInputValue(isQuota ? 'post_id' : 'date').trim();
 
-    // For quota: get posts reviewed count and notes
+    // For quota: post_id field holds the date, separate posts_reviewed field
+    const quotaDate        = isQuota ? i.fields.getTextInputValue('post_id').trim() : null;
+    const postId           = isQuota ? `QUOTA-${quotaDate}` : i.fields.getTextInputValue('post_id').trim();
+    const logDate          = isQuota ? quotaDate! : i.fields.getTextInputValue('date').trim();
     const postsReviewedRaw = isQuota ? i.fields.getTextInputValue('posts_reviewed').trim() : null;
-    const postsReviewed    = postsReviewedRaw ? parseInt(postsReviewedRaw.replace(/\D/g, '')) || 0 : null;
-    const noteRaw          = isQuota ? (i.fields.getTextInputValue('reason').trim() || null) : i.fields.getTextInputValue('reason').trim();
+    const postsReviewed    = postsReviewedRaw ? parseInt(postsReviewedRaw.replace(/\D/g, '')) : null;
+    const noteRaw          = i.fields.getTextInputValue('reason').trim();
 
-    // Build reason string
     let reason: string;
     if (isQuota) {
-      const parts = [`Missed quota on ${date}.`, `Posts reviewed: ${postsReviewed ?? 0}.`];
+      const parts = [`Missed quota on ${quotaDate}.`, `Posts reviewed: ${postsReviewed ?? 0}.`];
       if (noteRaw) parts.push(noteRaw);
       reason = parts.join(' ');
     } else {
-      reason = noteRaw as string;
+      reason = noteRaw;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
       await i.editReply({ embeds: [errorEmbed('Invalid date. Use YYYY-MM-DD.')] }); return;
     }
 
-    // Validate post ID for non-quota: numbers only or 'a' followed by numbers
     if (!isQuota && !/^\d+$/.test(postId) && !/^a\d+$/.test(postId)) {
       await i.editReply({ embeds: [errorEmbed('Invalid Post ID. Must be numbers only (e.g. `123456`) or a followed by numbers (e.g. `a123456`).')] }); return;
     }
 
-    // Validate posts reviewed is a number for quota
     if (isQuota && (postsReviewed === null || isNaN(postsReviewed))) {
       await i.editReply({ embeds: [errorEmbed('Posts reviewed must be a number.')] }); return;
     }
 
-    const guild = i.guild;
-    if (guild) {
-      const targetMember = await guild.members.fetch(targetId).catch(() => null);
+    if (i.guild) {
+      const targetMember = await i.guild.members.fetch(targetId).catch(() => null);
       if (!targetMember) { await i.editReply({ embeds: [errorEmbed('This user is no longer in the server.')] }); return; }
     }
 
-    // For non-quota, check duplicate post ID
     if (!isQuota) {
       const existing = await sql`SELECT 1 FROM used_post_ids WHERE post_id = ${postId}`;
       if (existing.length > 0) { await i.editReply({ embeds: [errorEmbed(`Post ID \`${postId}\` has already been logged.`)] }); return; }
     }
 
+    const displayPostId = isQuota ? `Quota - ${quotaDate}` : postId;
     const [result] = await sql`INSERT INTO pending_logs (user_id, post_id, reason, logged_by, date, severity) VALUES (${targetId}, ${postId}, ${reason}, ${i.user.id}, ${logDate}, ${severity}) RETURNING id`;
     if (!isQuota) await sql`INSERT INTO used_post_ids (post_id) VALUES (${postId}) ON CONFLICT DO NOTHING`;
 
-    const embed = pendingLogEmbed({ userId: targetId, postId: isQuota ? `Quota - ${date}` : postId, reason, loggedBy: i.user.id, date: logDate, pendingId: result.id, severity });
+    const embed = pendingLogEmbed({ userId: targetId, postId: displayPostId, reason, loggedBy: i.user.id, date: logDate, pendingId: result.id, severity });
     const approve = new ButtonBuilder().setCustomId(`log_approve:${result.id}`).setLabel('Approve').setStyle(ButtonStyle.Success);
     const editBtn = new ButtonBuilder().setCustomId(`log_edit:${result.id}`).setLabel('Edit Reason').setStyle(ButtonStyle.Primary);
     const sevBtn  = new ButtonBuilder().setCustomId(`log_sev:${result.id}`).setLabel('Change Severity').setStyle(ButtonStyle.Secondary);
@@ -1545,7 +1541,6 @@ async function handleModal(i: any): Promise<void> {
     const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
     await ch.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(approve, editBtn, sevBtn, deny)] });
 
-    // For severe quota misses, offer to convert to strike
     if (isQuota && severity === 'severe') {
       const strikeBtn = new ButtonBuilder().setCustomId(`quota_strike:${result.id}:${targetId}`).setLabel('Convert to Strike').setStyle(ButtonStyle.Danger);
       const keepBtn   = new ButtonBuilder().setCustomId(`quota_keep:${result.id}`).setLabel('Keep as Mistake').setStyle(ButtonStyle.Secondary);
