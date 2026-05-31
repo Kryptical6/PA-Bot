@@ -313,7 +313,14 @@ export async function generateTrainingPost(category: string): Promise<GeneratedP
     LIMIT 5
   `.catch(() => []);
 
-  const systemPrompt = buildSystemPrompt(exampleRows as any[]);
+  // Load active rule notes - global ones + category-specific ones
+  const noteRows = await sql`
+    SELECT note FROM post_train_notes
+    WHERE active = true AND (category IS NULL OR category = ${actualCategory})
+    ORDER BY category NULLS LAST, id ASC
+  `.catch(() => []);
+
+  const systemPrompt = buildSystemPrompt(exampleRows as any[], noteRows.map((r: any) => r.note));
   const userPrompt   = buildUserPrompt(actualCategory, difficulty);
 
   try {
@@ -353,7 +360,7 @@ export async function generateTrainingPost(category: string): Promise<GeneratedP
 }
 
 // SYSTEM PROMPT
-function buildSystemPrompt(examples: { post_body: string; correct_action: string; reasoning: string }[]): string {
+function buildSystemPrompt(examples: { post_body: string; correct_action: string; reasoning: string }[], notes: string[]): string {
   let examplesBlock = '';
   if (examples.length > 0) {
     examplesBlock = '\n\nSENIOR STAFF REFERENCE EXAMPLES (real reviewed posts submitted by your senior staff team - use these to calibrate tone, format, and rule application accuracy):\n';
@@ -361,6 +368,15 @@ function buildSystemPrompt(examples: { post_body: string; correct_action: string
       examplesBlock += `\nExample ${idx + 1}:\nPost: ${ex.post_body}\nCorrect action: ${ex.correct_action}\nReasoning: ${ex.reasoning}\n`;
     });
     examplesBlock += '\nUse these examples to understand what real posts in this category look like and how rules are applied. Do NOT copy them directly - generate something new and different.';
+  }
+
+  let notesBlock = '';
+  if (notes.length > 0) {
+    notesBlock = '\n\nSTAFF RULE NOTES AND OVERRIDES (these take priority over the standard rules above - follow them exactly):\n';
+    notes.forEach((note, idx) => {
+      notesBlock += `\n${idx + 1}. ${note}`;
+    });
+    notesBlock += '\n';
   }
 
   return `You are a post generator for a Roblox marketplace staff training tool called RoDevs. You generate fake but realistic marketplace posts for Post Approver trainees to review.
@@ -468,7 +484,7 @@ OFFICIAL RULES (from the RoDevs Post Approver Handbook):
 - Post meets all rules, no violations, POF threshold not met
 
 correct_action must be one of: "approve", "deny", "request_pof". Do NOT use "suspend".
-
+${notesBlock}
 Respond with ONLY valid raw JSON, no markdown fences, no preamble.
 JSON structure:
 {

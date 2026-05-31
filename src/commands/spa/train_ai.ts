@@ -79,6 +79,35 @@ export const data = new SlashCommandBuilder()
       .setDescription('The ID of the example to remove (get this from /train-ai list)')
       .setRequired(true)
     )
+  )
+  .addSubcommand(sub => sub
+    .setName('note-add')
+    .setDescription('Add a rule note or override that gets injected into the AI prompt')
+    .addStringOption(o => o
+      .setName('note')
+      .setDescription('The rule note or override text to inject (e.g. "The 1.5x price range rule does not apply to FH")')
+      .setRequired(true)
+      .setMaxLength(500)
+    )
+    .addStringOption(o => o
+      .setName('category')
+      .setDescription('Scope to a specific category, or leave blank to apply to all categories')
+      .setRequired(false)
+      .addChoices(...CATEGORY_CHOICES)
+    )
+  )
+  .addSubcommand(sub => sub
+    .setName('note-list')
+    .setDescription('View all active AI rule notes')
+  )
+  .addSubcommand(sub => sub
+    .setName('note-remove')
+    .setDescription('Remove an AI rule note by ID')
+    .addIntegerOption(o => o
+      .setName('id')
+      .setDescription('The ID of the note to remove (get this from /train-ai note-list)')
+      .setRequired(true)
+    )
   );
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
@@ -96,6 +125,12 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     await handleList(i);
   } else if (sub === 'remove') {
     await handleRemove(i);
+  } else if (sub === 'note-add') {
+    await handleNoteAdd(i);
+  } else if (sub === 'note-list') {
+    await handleNoteList(i);
+  } else if (sub === 'note-remove') {
+    await handleNoteRemove(i);
   }
 }
 
@@ -191,4 +226,91 @@ async function handleRemove(i: ChatInputCommandInteraction): Promise<void> {
   await sql`UPDATE post_train_examples SET active = false WHERE id = ${id}`;
 
   await i.editReply({ embeds: [successEmbed('Example Removed', `Training example #${id} (${row.category} / ${row.correct_action}) has been deactivated and will no longer be used.`)] });
+}
+
+async function handleNoteAdd(i: ChatInputCommandInteraction): Promise<void> {
+  const note     = i.options.getString('note', true).trim();
+  const category = i.options.getString('category') ?? null;
+
+  await i.deferReply({ ephemeral: true });
+
+  if (note.length < 10) {
+    await i.editReply({ embeds: [errorEmbed('Note is too short. Please be specific about the rule change.')] });
+    return;
+  }
+
+  const [row] = await sql`
+    INSERT INTO post_train_notes (note, category, added_by, active)
+    VALUES (${note}, ${category}, ${i.user.id}, true)
+    RETURNING id
+  `;
+
+  const scopeLabel = category ? (TRAIN_CATEGORIES[category] ?? category) : 'All categories';
+
+  await i.editReply({ embeds: [new EmbedBuilder()
+    .setColor(Colors.Green)
+    .setTitle('Rule Note Added')
+    .setDescription('This note will be injected into the AI system prompt for every training post generation.')
+    .addFields(
+      { name: 'Note ID', value: String(row.id), inline: true },
+      { name: 'Scope',   value: scopeLabel,       inline: true },
+      { name: 'Note',    value: note },
+    )
+    .setFooter({ text: 'Use /train-ai note-remove to delete this note.' })
+    .setTimestamp(),
+  ]});
+}
+
+async function handleNoteList(i: ChatInputCommandInteraction): Promise<void> {
+  await i.deferReply({ ephemeral: true });
+
+  const rows = await sql`
+    SELECT id, category, note, added_by, created_at
+    FROM post_train_notes
+    WHERE active = true
+    ORDER BY category NULLS LAST, id ASC
+  `;
+
+  if (rows.length === 0) {
+    await i.editReply({ embeds: [new EmbedBuilder()
+      .setColor(Colors.Blue)
+      .setTitle('No Active Rule Notes')
+      .setDescription('No rule notes have been added yet.\n\nUse `/train-ai note-add` to add one.')
+      .setTimestamp(),
+    ]});
+    return;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(Colors.Blue)
+    .setTitle('Active AI Rule Notes')
+    .setDescription(`${rows.length} active note(s). These are injected into every AI prompt generation. Use \`/train-ai note-remove id:<id>\` to remove one.`)
+    .setTimestamp();
+
+  rows.forEach((row: any) => {
+    const scopeLabel = row.category ? (TRAIN_CATEGORIES[row.category] ?? row.category) : 'All categories';
+    embed.addFields({
+      name:  `ID ${row.id} - ${scopeLabel} - added by <@${row.added_by}>`,
+      value: row.note,
+    });
+  });
+
+  await i.editReply({ embeds: [embed] });
+}
+
+async function handleNoteRemove(i: ChatInputCommandInteraction): Promise<void> {
+  const id = i.options.getInteger('id', true);
+
+  await i.deferReply({ ephemeral: true });
+
+  const [row] = await sql`SELECT * FROM post_train_notes WHERE id = ${id}`;
+  if (!row) {
+    await i.editReply({ embeds: [errorEmbed(`No rule note found with ID ${id}.`)] });
+    return;
+  }
+
+  await sql`UPDATE post_train_notes SET active = false WHERE id = ${id}`;
+
+  const scopeLabel = row.category ? (TRAIN_CATEGORIES[row.category] ?? row.category) : 'All categories';
+  await i.editReply({ embeds: [successEmbed('Note Removed', `Rule note #${id} (${scopeLabel}) has been deactivated and will no longer be injected into AI prompts.`)] });
 }
