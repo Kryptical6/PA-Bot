@@ -284,7 +284,7 @@ async function handleButton(i: any): Promise<void> {
     const pending = pendingRows[0];
 
     const exp = new Date(); exp.setDate(exp.getDate() + config.expiry.defaultDays);
-    await sql`INSERT INTO logs (user_id, type, reason, post_id, logged_by, date, expires_at) VALUES (${pending.user_id}, ${type}, ${pending.reason}, ${pending.post_id}, ${pending.logged_by}, ${pending.date}, ${exp.toISOString()})`;
+    await sql`INSERT INTO logs (user_id, type, reason, post_id, logged_by, date, expires_at, severity) VALUES (${pending.user_id}, ${type}, ${pending.reason}, ${pending.post_id}, ${pending.logged_by}, ${pending.date}, ${exp.toISOString()}, ${pending.severity ?? 'minor'})`;
     await sql`DELETE FROM pending_logs WHERE id = ${pendingId}`;
 
     // Edit the original HPA review message (fetch from hpaReview channel by footer)
