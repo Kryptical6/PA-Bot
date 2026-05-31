@@ -6,7 +6,7 @@ import { sql } from '../database/client';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
 
-// ─── CATEGORY LABELS ──────────────────────────────────────────────────────────
+// CATEGORY LABELS
 export const TRAIN_CATEGORIES: Record<string, string> = {
   fh:             'For Hire (FH)',
   lfd:            'Looking For Developer (LFD)',
@@ -18,7 +18,7 @@ export const TRAIN_CATEGORIES: Record<string, string> = {
   mixed:          'Mixed (all categories)',
 };
 
-// ─── GENERATED POST STRUCTURE ─────────────────────────────────────────────────
+// GENERATED POST STRUCTURE
 export interface GeneratedPost {
   title:          string;
   description:    string;
@@ -34,7 +34,7 @@ export interface GeneratedPost {
   difficulty:     'easy' | 'medium' | 'hard';
 }
 
-// ─── GENERATE POST VIA GPT-4o-mini ────────────────────────────────────────────
+// GENERATE POST VIA GPT-4o-mini
 export async function generateTrainingPost(category: string): Promise<GeneratedPost | null> {
   const actualCategory = category === 'mixed'
     ? (['fh', 'lfd', 'skill_role', 'sell_creations', 'investors', 'advertising', 'reviews'] as const)[
@@ -85,26 +85,26 @@ export async function generateTrainingPost(category: string): Promise<GeneratedP
   }
 }
 
-// ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
+// SYSTEM PROMPT
 function buildSystemPrompt(): string {
   return `You are a post generator for a Roblox marketplace staff training tool called RoDevs. You generate fake but realistic marketplace posts for Post Approver trainees to review.
 
 MARKETPLACE CATEGORIES:
-- fh: For Hire — developers advertising their services
-- lfd: Looking For Developer — users hiring developers
-- skill_role: Skill Role Applications — developers proving skill to unlock a posting category
-- sell_creations: Sell Creations — users selling ready-made assets
-- investors: Investor Posts — developers seeking financial investment
-- advertising: Roblox Advertising — advertising a Roblox game/group
-- reviews: Reviews — leaving feedback about a developer's service
+- fh: For Hire - developers advertising their services
+- lfd: Looking For Developer - users hiring developers
+- skill_role: Skill Role Applications - developers proving skill to unlock a posting category
+- sell_creations: Sell Creations - users selling ready-made assets
+- investors: Investor Posts - developers seeking financial investment
+- advertising: Roblox Advertising - advertising a Roblox game/group
+- reviews: Reviews - leaving feedback about a developer's service
 
-OFFICIAL RULES (must be followed exactly — from the RoDevs Post Approver Handbook):
+OFFICIAL RULES (must be followed exactly - from the RoDevs Post Approver Handbook):
 
 == FOR HIRE (FH) ==
 - Must state clear payment and payment method (Robux, USD, etc.)
-- "Negotiable" alone is NOT acceptable — a fixed minimum or range is required
+- "Negotiable" alone is NOT acceptable - a fixed minimum or range is required
 - Price ranges must NOT exceed 1.5x the base payment (smaller payments can bypass this)
-- Percentages are not a valid standalone payment — a fixed price must also be provided
+- Percentages are not a valid standalone payment - a fixed price must also be provided
 - Posts must be professional, clear, and well formatted
 - Poor grammar or spelling that makes the post hard to read = DENY
 - Low-quality or poorly described services = DENY
@@ -124,20 +124,20 @@ OFFICIAL RULES (must be followed exactly — from the RoDevs Post Approver Handb
 - No selling plugins
 - FH posts need at least 2 work examples
 - Scripting/animation/video/SFX/sound/VFX need at least 2 VIDEO examples
-- Examples must not require a download — must use streaming (e.g. YouTube)
+- Examples must not require a download - must use streaming (e.g. YouTube)
 - No low-quality examples or phone camera photos of a screen
 - Skill role apps need proof of ownership (layers screenshot, keyframes, topology, etc.)
 
 == LOOKING FOR DEVELOPER (LFD) ==
 - Must state a clear payment or range (not just "negotiable")
-- No percentage-only payment — a fixed price is required
-- Payments must be fair — underpayment = DENY
+- No percentage-only payment - a fixed price is required
+- Payments must be fair - underpayment = DENY
 - No commission finders (project owner must post themselves)
 - No downloadable files
 - No Discord server links
 - No multi-hire (one developer role per post)
 - No server creation or management services
-- Commission deadline must be at least 3 days — under 3 days = DENY
+- Commission deadline must be at least 3 days - under 3 days = DENY
 - 3D rigger posted in lfd-others = wrong channel (should be lfd-animation or lfd-modeler)
 - 2 scam logs = DENY
 
@@ -156,23 +156,23 @@ OFFICIAL RULES (must be followed exactly — from the RoDevs Post Approver Handb
 - Scripted systems/VFX/Animations need video examples
 - Must meet quality standards
 - No downloadable files
-- 1 scam log = DENY (stricter than FH — Sell Creations requires a clean record)
+- 1 scam log = DENY (stricter than FH - Sell Creations requires a clean record)
 
 == INVESTOR POSTS ==
-- Must offer at least 15% revenue share — below 15% = DENY
+- Must offer at least 15% revenue share - below 15% = DENY
 - Must state a clear fixed amount or range for investment
 - At least 5 images covering all aspects (maps, UI, models, systems)
 - Game must be at least 55% complete
 - If 100% complete, must include a game link
 - No off-platform games
 - 1 scam log = DENY
-- 90–100% revenue share offer = DENY (effectively selling the game, which is prohibited)
+- 90-100% revenue share offer = DENY (effectively selling the game, which is prohibited)
 - No downloadable files
 
 == ROBLOX ADVERTISING ==
 - Game must be publicly playable (not private or unpublished)
 - No AFK games
-- Only Roblox games/groups — no off-platform products
+- Only Roblox games/groups - no off-platform products
 - No scam games
 - Services cannot be advertised here (only Roblox platform creations)
 
@@ -193,7 +193,7 @@ OFFICIAL RULES (must be followed exactly — from the RoDevs Post Approver Handb
 
 == SUSPEND action ==
 - Used ONLY when there is suspected AI-generated content, free models, or stolen assets AND there is evidence mentioned in the post itself or its examples
-- NOT used for simple rule violations — those are "deny"
+- NOT used for simple rule violations - those are "deny"
 - Suspension is followed by a punishment request process
 
 == APPROVE action ==
@@ -217,18 +217,18 @@ JSON structure:
 }`;
 }
 
-// ─── USER PROMPT ──────────────────────────────────────────────────────────────
+// USER PROMPT
 function buildUserPrompt(category: string, difficulty: 'easy' | 'medium' | 'hard'): string {
   const diffGuide: Record<string, string> = {
     easy:   'Make the violation VERY obvious and immediately visible. For example: no payment at all, a Discord link right in the description, or 0 examples provided.',
-    medium: 'The post should look mostly fine at first glance. Include one clear rule violation that a trained reviewer would catch — e.g. percentage-only payment, deadline is exactly 2 days, or price range is 1.8x the base.',
-    hard:   'This is an edge case. Options: (1) A completely clean post that should be APPROVED — make it look professional and well-formed. (2) A POF post — clean but offers $250 USD or 35,000 Robux. (3) A subtle violation — e.g. price range is exactly 1.6x base, deadline is 2 days 20 hours described as "roughly 3 days", or proof of ownership is described but is actually a render not a layer screenshot. (4) A SUSPEND case — post mentions AI-generated examples or a reverse image search note in the description.',
+    medium: 'The post should look mostly fine at first glance. Include one clear rule violation that a trained reviewer would catch - e.g. percentage-only payment, deadline is exactly 2 days, or price range is 1.8x the base.',
+    hard:   'This is an edge case. Options: (1) A completely clean post that should be APPROVED - make it look professional and well-formed. (2) A POF post - clean but offers $250 USD or 35,000 Robux. (3) A subtle violation - e.g. price range is exactly 1.6x base, deadline is 2 days 20 hours described as "roughly 3 days", or proof of ownership is described but is actually a render not a layer screenshot. (4) A SUSPEND case - post mentions AI-generated examples or a reverse image search note in the description.',
   };
 
   const actionGuide: Record<string, string> = {
     easy:   'correct_action should almost always be "deny".',
     medium: 'correct_action can be "deny", "approve", or "request_pof". Mix it up.',
-    hard:   'correct_action can be anything. Lean towards "approve" or "request_pof" for hard — a common training failure is denying clean posts.',
+    hard:   'correct_action can be anything. Lean towards "approve" or "request_pof" for hard - a common training failure is denying clean posts.',
   };
 
   const catGuide: Record<string, string> = {
@@ -254,21 +254,21 @@ Additional rules:
 - member_since: a realistic date within the last 2 years.
 - has_reviews: mostly false, occasionally true.
 - violation: null if correct_action is "approve" or "request_pof" with no violations. Otherwise a SHORT plain label (e.g. "No payment stated", "Discord server link in post", "Commission deadline under 3 days", "Percentage-only payment", "No examples provided").
-- explanation: must reference the EXACT rule from the handbook. Be specific. Example: "This post uses percentage-only payment. The handbook states that percentages are not a valid standalone payment — a fixed price must also be provided."
+- explanation: must reference the EXACT rule from the handbook. Be specific. Example: "This post uses percentage-only payment. The handbook states that percentages are not a valid standalone payment - a fixed price must also be provided."
 - The post_id should be a realistic 6-digit number.
 
 IMPORTANT: Only output the JSON object. Nothing else.`;
 }
 
-// ─── BUILD POST EMBED ─────────────────────────────────────────────────────────
+// BUILD POST EMBED
 export function buildPostEmbed(post: GeneratedPost, sessionScore: number, sessionTotal: number): EmbedBuilder {
   const categoryDisplay = post.category
     .split('-')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' › ');
+    .join(' > ');
 
   const embed = new EmbedBuilder()
-    .setColor(0x2b2d31) // Discord dark background colour
+    .setColor(0x2b2d31)
     .setTitle(post.title)
     .setDescription(post.description);
 
@@ -276,13 +276,12 @@ export function buildPostEmbed(post: GeneratedPost, sessionScore: number, sessio
     embed.addFields({ name: 'Payment', value: post.payment });
   }
 
-  // About This User section — mirrors the real post panel
   const userLines = [
     `<@000000000000000000>`,
-    `🗓️ RoDevs Member since ${post.member_since}`,
+    `RoDevs Member since ${post.member_since}`,
     post.scam_logs === 0
-      ? '💰 No scam logs found.'
-      : `⚠️ **${post.scam_logs} scam log${post.scam_logs > 1 ? 's' : ''} found.**`,
+      ? 'No scam logs found.'
+      : `**${post.scam_logs} scam log${post.scam_logs > 1 ? 's' : ''} found.**`,
   ];
 
   embed.addFields(
@@ -292,44 +291,37 @@ export function buildPostEmbed(post: GeneratedPost, sessionScore: number, sessio
     { name: 'Post ID',  value: post.post_id,                                       inline: true },
   );
 
-  embed.setFooter({ text: `Training Session  •  Score: ${sessionScore}/${sessionTotal}  •  ${getDifficultyLabel(post.difficulty)}` })
+  embed.setFooter({ text: `Training Session  |  Score: ${sessionScore}/${sessionTotal}  |  ${getDifficultyLabel(post.difficulty)}` })
     .setTimestamp();
 
   return embed;
 }
 
-// ─── BUILD ACTION BUTTONS ─────────────────────────────────────────────────────
+// BUILD ACTION BUTTONS
 export function buildPostActionRows(sessionId: number): ActionRowBuilder<ButtonBuilder>[] {
-  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`pt_action:${sessionId}:approve`)
-      .setLabel('✅ Approve')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`pt_action:${sessionId}:approve_msg`)
-      .setLabel('✅ Approve with Message')
+      .setLabel('Approve')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(`pt_action:${sessionId}:deny`)
-      .setLabel('⭕ Deny (custom reason)')
+      .setLabel('Deny')
       .setStyle(ButtonStyle.Danger),
-  );
-
-  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`pt_action:${sessionId}:suspend`)
-      .setLabel('🖐 Suspend')
+      .setLabel('Suspend')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`pt_action:${sessionId}:request_pof`)
-      .setLabel('🖐 Request Proof of Funds')
-      .setStyle(ButtonStyle.Primary),
+      .setLabel('Request Proof of Funds')
+      .setStyle(ButtonStyle.Secondary),
   );
 
-  return [row1, row2];
+  return [row];
 }
 
-// ─── BUILD FEEDBACK EMBED ─────────────────────────────────────────────────────
+// BUILD FEEDBACK EMBED
 export function buildFeedbackEmbed(
   post: GeneratedPost,
   userAction: string,
@@ -338,77 +330,69 @@ export function buildFeedbackEmbed(
   sessionTotal: number,
 ): EmbedBuilder {
   const actionLabels: Record<string, string> = {
-    approve:     '✅ Approve',
-    approve_msg: '✅ Approve with Message',
-    deny:        '⭕ Deny',
-    suspend:     '🖐 Suspend',
-    request_pof: '🖐 Request Proof of Funds',
-  };
-
-  const correctLabels: Record<string, string> = {
-    approve:     '✅ Approve',
-    deny:        '⭕ Deny',
-    suspend:     '🖐 Suspend',
-    request_pof: '🖐 Request Proof of Funds',
+    approve:     'Approve',
+    deny:        'Deny',
+    suspend:     'Suspend',
+    request_pof: 'Request Proof of Funds',
   };
 
   const embed = new EmbedBuilder()
     .setColor(correct ? Colors.Green : Colors.Red)
-    .setTitle(correct ? '✅ Correct!' : '❌ Incorrect')
+    .setTitle(correct ? 'Correct' : 'Incorrect')
     .addFields(
-      { name: 'Your Action',    value: actionLabels[userAction] ?? userAction,                      inline: true },
-      { name: 'Correct Action', value: correctLabels[post.correct_action] ?? post.correct_action,   inline: true },
-      { name: 'Post',           value: `**${post.title}** (\`${post.post_id}\`)`,                   inline: false },
+      { name: 'Your Action',    value: actionLabels[userAction] ?? userAction,                              inline: true },
+      { name: 'Correct Action', value: actionLabels[post.correct_action] ?? post.correct_action,           inline: true },
+      { name: 'Post',           value: `**${post.title}** (\`${post.post_id}\`)`,                          inline: false },
     );
 
   if (!correct && post.violation) {
-    embed.addFields({ name: '📌 Rule Violated', value: post.violation });
+    embed.addFields({ name: 'Rule Violated', value: post.violation });
   }
 
-  embed.addFields({ name: '📖 Explanation', value: post.explanation });
+  embed.addFields({ name: 'Explanation', value: post.explanation });
 
-  embed.setFooter({ text: `Score: ${sessionScore}/${sessionTotal}  •  ${getDifficultyLabel(post.difficulty)}` })
+  embed.setFooter({ text: `Score: ${sessionScore}/${sessionTotal}  |  ${getDifficultyLabel(post.difficulty)}` })
     .setTimestamp();
 
   return embed;
 }
 
-// ─── CONTINUE / END BUTTONS ───────────────────────────────────────────────────
+// CONTINUE / END BUTTONS
 export function buildContinueRow(sessionId: number): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`pt_continue:${sessionId}`)
-      .setLabel('▶ Next Post')
+      .setLabel('Next Post')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`pt_end:${sessionId}`)
-      .setLabel('🛑 End Session')
+      .setLabel('End Session')
       .setStyle(ButtonStyle.Secondary),
   );
 }
 
-// ─── SESSION SUMMARY EMBED ────────────────────────────────────────────────────
+// SESSION SUMMARY EMBED
 export function buildSummaryEmbed(score: number, total: number, userId: string): EmbedBuilder {
   const pct   = total > 0 ? Math.round((score / total) * 100) : 0;
   const grade =
-    pct >= 90 ? { label: 'Excellent 🌟', color: Colors.Green  } :
-    pct >= 75 ? { label: 'Good 👍',       color: Colors.Blue   } :
-    pct >= 60 ? { label: 'Pass ✔️',        color: Colors.Yellow } :
-                { label: 'Needs Work 📚', color: Colors.Red    };
+    pct >= 90 ? { label: 'Excellent', color: Colors.Green  } :
+    pct >= 75 ? { label: 'Good',      color: Colors.Blue   } :
+    pct >= 60 ? { label: 'Pass',      color: Colors.Yellow } :
+                { label: 'Needs Work', color: Colors.Red   };
 
   return new EmbedBuilder()
     .setColor(grade.color)
-    .setTitle('📊 Training Session Complete')
-    .setDescription(`Well done for completing a training session, <@${userId}>!`)
+    .setTitle('Training Session Complete')
+    .setDescription(`Good session, <@${userId}>!`)
     .addFields(
-      { name: 'Final Score',  value: `**${score}/${total}** (${pct}%)`, inline: true },
-      { name: 'Grade',        value: grade.label,                        inline: true },
+      { name: 'Final Score', value: `**${score}/${total}** (${pct}%)`, inline: true },
+      { name: 'Grade',       value: grade.label,                        inline: true },
     )
     .setFooter({ text: 'Use /post-train to start a new session anytime.' })
     .setTimestamp();
 }
 
-// ─── CATEGORY SELECT MENU ─────────────────────────────────────────────────────
+// CATEGORY SELECT MENU
 export function buildCategorySelect(): ActionRowBuilder<StringSelectMenuBuilder> {
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
@@ -422,7 +406,7 @@ export function buildCategorySelect(): ActionRowBuilder<StringSelectMenuBuilder>
   );
 }
 
-// ─── SESSION DB HELPERS ───────────────────────────────────────────────────────
+// SESSION DB HELPERS
 export async function getActiveSession(userId: string): Promise<any | null> {
   const rows = await sql`SELECT * FROM post_train_sessions WHERE user_id = ${userId} AND status = 'active'`;
   return rows[0] ?? null;
@@ -468,11 +452,6 @@ export async function recordAnswer(sessionId: number, correct: boolean): Promise
   return { score: Number(updated.score), total: Number(updated.total) };
 }
 
-// "approve_msg" counts the same as "approve" for scoring
-export function normaliseAction(action: string): string {
-  return action === 'approve_msg' ? 'approve' : action;
-}
-
 function getDifficultyLabel(d: string): string {
-  return d === 'easy' ? '🟢 Easy' : d === 'medium' ? '🟡 Medium' : '🔴 Hard';
+  return d === 'easy' ? 'Easy' : d === 'medium' ? 'Medium' : 'Hard';
 }
