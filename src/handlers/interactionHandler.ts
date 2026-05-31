@@ -71,6 +71,8 @@ import * as bulkActions from '../commands/hpa/bulk_actions';
 import * as manageLogTracker from '../commands/hpa/manage_log_tracker';
 import * as assessment from '../commands/hpa/assessment';
 import * as severityGuide from '../commands/hpa/severity_guide';
+import * as postTrain from '../commands/shared/post_train';
+import { handlePostTrainInteraction } from './postTrainHandler';
 
 const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Promise<void> }> = {
   help, my_logs: myLogs, appeal, tag, tag_search: tagSearch, pa_assessment: paAssessment,
@@ -81,6 +83,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   suggest, search_suggestions: searchSuggestions,
   set_reminder: setReminder, send_tag: sendTag,
   remind, 'bot-bug': botBug,
+  'post-train': postTrain,
   import_assessment_questions: importAssessmentQ,
   escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,
@@ -138,6 +141,11 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
 // ─── BUTTON HANDLER ───────────────────────────────────────────────────────────
 async function handleButton(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
+
+  // Post training buttons
+  if (action === 'pt_action' || action === 'pt_continue' || action === 'pt_end') {
+    await handlePostTrainInteraction(i); return;
+  }
 
   // Staff profile pagination buttons
   if (action === 'sp_next' || action === 'sp_prev' || action === 'sp_all_mistakes' || action === 'sp_back') {
@@ -297,8 +305,35 @@ async function handleButton(i: any): Promise<void> {
       if (original) await original.edit({ embeds: [resultEmbed], components: [] });
     } catch { /* silent */ }
 
-    // DM logger with post ID
-    await safeDM(i.client, pending.logged_by, successEmbed('Log Approved', `Your log against <@${pending.user_id}> was approved as a **${type}**. You may now delete post \`${pending.post_id}\`.`), 'log approved');
+    // DM logger with post ID, reason, severity and recommended action
+    const isApplication = /^a\d+$/i.test(pending.post_id ?? '');
+    const sev = (pending.severity ?? 'minor').toLowerCase();
+
+    let postAction = 'No action needed on the post.';
+    if (type === 'strike') {
+      postAction = isApplication
+        ? `Remove the skill role and deny post \`${pending.post_id}\`.`
+        : `Delete post \`${pending.post_id}\`.`;
+    } else if (sev === 'moderate' || sev === 'severe') {
+      postAction = isApplication
+        ? `Remove the skill role and deny post \`${pending.post_id}\`.`
+        : `Delete post \`${pending.post_id}\`.`;
+      if (sev === 'severe') postAction += ' Consider a punishment request if applicable.';
+    }
+
+    const sevLabel = sev.charAt(0).toUpperCase() + sev.slice(1);
+    await safeDM(i.client, pending.logged_by, new EmbedBuilder()
+      .setColor(Colors.Green)
+      .setTitle('Log Approved')
+      .addFields(
+        { name: 'User',      value: `<@${pending.user_id}>`,   inline: true },
+        { name: 'Post ID',   value: `\`${pending.post_id}\``, inline: true },
+        { name: 'Severity',  value: sevLabel,                  inline: true },
+        { name: 'Type',      value: type.charAt(0).toUpperCase() + type.slice(1), inline: true },
+        { name: 'Reason',    value: pending.reason },
+        { name: 'Post Action', value: postAction },
+      )
+      .setTimestamp(), 'log approved');
 
     // DM user if strike
     if (type === 'strike') {
@@ -632,7 +667,6 @@ async function handleButton(i: any): Promise<void> {
   }
 }
 
-// ─── GAME NIGHT BUTTONS ───────────────────────────────────────────────────────
 // ─── WEEKLY REPORT BUTTONS ────────────────────────────────────────────────────
 async function handleWeeklyReportButton(i: any, action: string, rest: string[]): Promise<void> {
   const cycleId = parseInt(rest[0]);
@@ -739,7 +773,6 @@ async function handleEscalationButton(i: any, action: string, rest: string[]): P
     if (!isClaimer && !isHPA(m)) { await i.reply({ content: 'Only the claimer or HPA can resolve this.', ephemeral: true }); return; }
 
     if (action === 'esc_handle') {
-      // Show outcome dropdown - includes post ID for reference
       const embed = new EmbedBuilder()
         .setColor(Colors.Blue)
         .setTitle('Select Outcome')
@@ -810,13 +843,11 @@ async function handleAuditButton(i: any, action: string, rest: string[]): Promis
     const dayLog = await getOrCreateDailyLog(userId, today);
     const logsToday = (dayLog?.submitted || 0) + (dayLog?.approved || 0) + (dayLog?.denied || 0);
 
-    // Update the message to show active session
     await i.update({
       embeds: [buildSessionEmbed(userId, logsToday, cfg, 'active')],
       components: [buildSessionButtons(userId)],
     });
 
-    // Record session start using the DM message details
     const dmMsg = i.message;
     await startLogSession(i.client, userId, dmMsg.channelId, dmMsg.id);
   }
@@ -828,7 +859,6 @@ async function handleAuditButton(i: any, action: string, rest: string[]): Promis
     const sessions = await sql`SELECT * FROM spa_log_sessions WHERE user_id = ${userId} AND status = 'active'`;
     if (sessions.length === 0) { await i.reply({ content: 'No active session found.', ephemeral: true }); return; }
 
-    // Step 1: show review type dropdown
     const select = new StringSelectMenuBuilder()
       .setCustomId(`session_review_type:${sessions[0].id}`)
       .setPlaceholder('How did you review posts today?')
@@ -876,7 +906,6 @@ async function handleAuditButton(i: any, action: string, rest: string[]): Promis
 
     if (dayLog.done_clicked) { await i.update({ content: '✅ Already marked as done today.', components: [] }); return; }
 
-    // Check how many logs submitted today
     const submitted = dayLog.submitted || 0;
     const underperformThreshold = Math.floor((cfg.soft_target * (cfg.underperform_pct || 50)) / 100);
     const underperformed = submitted < underperformThreshold;
@@ -884,7 +913,6 @@ async function handleAuditButton(i: any, action: string, rest: string[]): Promis
     await sql`UPDATE spa_daily_logs SET done_clicked = true, underperformed = ${underperformed} WHERE user_id = ${userId} AND log_date = ${today}`;
 
     if (underperformed) {
-      // Notify HPA with ignore button
       try {
         const ch = await i.client.channels.fetch(config.channels.appeals) as TextChannel;
         const ignoreBtn = new ButtonBuilder()
@@ -1007,7 +1035,6 @@ async function handleGameNightButton(i: any): Promise<void> {
 
     await sql`UPDATE game_suggestions SET status = 'approved' WHERE id = ${suggId}`;
 
-    // Post in suggestions channel with upvote button
     try {
       const ch = await i.client.channels.fetch(config.channels.gameSuggestions) as TextChannel;
       const embed = new EmbedBuilder()
@@ -1045,7 +1072,6 @@ async function handleGameNightButton(i: any): Promise<void> {
     await sql`INSERT INTO game_suggestion_upvotes (suggestion_id, user_id) VALUES (${suggId}, ${i.user.id})`;
     await sql`UPDATE game_suggestions SET upvotes = upvotes + 1 WHERE id = ${suggId}`;
 
-    // Update embed
     const [s] = await sql`SELECT * FROM game_suggestions WHERE id = ${suggId}`;
     try {
       const embed = EmbedBuilder.from(i.message.embeds[0]);
@@ -1067,7 +1093,6 @@ async function handleGameNightButton(i: any): Promise<void> {
       ON CONFLICT (game_night_id, user_id) DO UPDATE SET attending = ${attending}
     `;
 
-    // Update the announcement embed
     try {
       const { embed, row } = await buildGameNightEmbed(nightId);
       await i.message.edit({ embeds: [embed], components: [row] });
@@ -1110,7 +1135,6 @@ async function handleGameNightButton(i: any): Promise<void> {
   }
 }
 
-// ─── SELECT HANDLER ───────────────────────────────────────────────────────────
 // ─── WARN READ RECEIPT ────────────────────────────────────────────────────────
 async function handleWarnRead(i: any, rest: string[]): Promise<void> {
   const receiptId = parseInt(rest[0]);
@@ -1124,7 +1148,6 @@ async function handleWarnRead(i: any, rest: string[]): Promise<void> {
   await sql`UPDATE warning_read_receipts SET read_at = NOW() WHERE id = ${receiptId}`;
   await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Acknowledged').setDescription('You have confirmed you have read this warning.').setTimestamp()], components: [] });
 
-  // DM the person who sent the warning
   try {
     const sender = await i.client.users.fetch(receipt.warned_by);
     await sender.send({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Warning Acknowledged').setDescription(`<@${receipt.warned_user_id}> has read and acknowledged your warning.\n\n**Reason:** ${receipt.reason}`).setTimestamp()] });
@@ -1146,7 +1169,6 @@ async function handleFeedbackButton(i: any, action: string, rest: string[]): Pro
   if (!isPA(m)) { await i.reply({ content: 'No permission.', ephemeral: true }); return; }
 
   if (action === 'fb_start') {
-    // Check already submitted
     const submitted = await sql`SELECT 1 FROM feedback_responses WHERE round_id = ${roundId} AND user_id = ${i.user.id}`;
     if (submitted.length > 0) { await i.reply({ embeds: [errorEmbed('You have already submitted feedback for this round.')], ephemeral: true }); return; }
 
@@ -1162,7 +1184,6 @@ async function handleFeedbackButton(i: any, action: string, rest: string[]): Pro
   }
 
   else if (action === 'fb_confirm') {
-    // Submit the pending response
     const pending = await sql`SELECT * FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`;
     if (pending.length === 0) { await i.reply({ embeds: [errorEmbed('No pending feedback found.')], ephemeral: true }); return; }
     const p = pending[0];
@@ -1176,7 +1197,6 @@ async function handleFeedbackButton(i: any, action: string, rest: string[]): Pro
     `;
     await sql`DELETE FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`;
 
-    // Post to private responses channel
     try {
       const ch = await i.client.channels.fetch(config.channels.feedbackResponses) as TextChannel;
       await ch.send({ embeds: [buildSubmittedEmbed(round, response, i.user.id)] });
@@ -1204,7 +1224,6 @@ async function handleFeedbackButton(i: any, action: string, rest: string[]): Pro
   }
 
   else if (action === 'fb_edit') {
-    // Re-open text modal
     const pending = await sql`SELECT * FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`;
     const p = pending[0] ?? {};
     await i.showModal({
@@ -1233,7 +1252,6 @@ async function handleSuggestionButton(i: any, action: string, rest: string[]): P
     await sql`UPDATE suggestions SET status = 'considered', reviewed_by = ${i.user.id}, updated_at = NOW() WHERE id = ${suggId}`;
     const updated = (await sql`SELECT * FROM suggestions WHERE id = ${suggId}`)[0];
 
-    // Create a thread for this suggestion
     try {
       const ch = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
       const thread = await ch.threads.create({
@@ -1243,7 +1261,6 @@ async function handleSuggestionButton(i: any, action: string, rest: string[]): P
       });
       await sql`UPDATE suggestions SET thread_id = ${thread.id} WHERE id = ${suggId}`;
 
-      // Post embed with HPA-only action buttons in thread
       const threadEmbed = buildSuggestionEmbed({ ...updated, status: 'considered' });
       await thread.send({
         content: `<@&${config.roles.HPA}> This suggestion is now under consideration.`,
@@ -1252,11 +1269,9 @@ async function handleSuggestionButton(i: any, action: string, rest: string[]): P
       });
     } catch (e) { console.error('Failed to create suggestion thread:', e); }
 
-    // Update original embed
     await i.message.edit({ embeds: [buildSuggestionEmbed(updated)], components: [] });
     await i.reply({ embeds: [{ color: 0x57f287, title: '✅ Marked as Considered', description: `Suggestion #${suggId} moved to thread.` }], ephemeral: true });
 
-    // DM submitter
     await dmUser(i.client, sug.submitted_by, {
       embeds: [new EmbedBuilder().setColor(Colors.Blue).setTitle('💡 Suggestion Update').setDescription(`Your suggestion **${sug.title}** is now under consideration by the team!`).setTimestamp()]
     });
@@ -1291,8 +1306,14 @@ async function handleSuggestionButton(i: any, action: string, rest: string[]): P
   }
 }
 
+// ─── SELECT HANDLER ───────────────────────────────────────────────────────────
 async function handleSelect(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
+
+  // Post training category select
+  if (i.customId === 'pt_category_select') {
+    await handlePostTrainInteraction(i); return;
+  }
 
   if (action === 'esc_outcome_sel') {
     const escalationId = parseInt(rest[0]);
@@ -1312,13 +1333,19 @@ async function handleSelect(i: any): Promise<void> {
 
     // accepted_banned - no modal needed
     if (outcome === 'accepted_banned') {
-      await i.deferUpdate();
+      await i.deferReply({ ephemeral: true });
       const notes = `Accepted - User Banned`;
       await sql`UPDATE post_escalations SET status = 'handled', resolution_notes = ${notes}, updated_at = NOW() WHERE id = ${escalationId}`;
       const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
 
-      // Update embed
-      try { await i.message.edit({ embeds: [buildEscalationEmbed(updated)], components: [] }); } catch { /* silent */ }
+      // Update the channel embed via stored message_id
+      if (e.message_id) {
+        try {
+          const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
+          const msg = await ch.messages.fetch(e.message_id);
+          await msg.edit({ embeds: [buildEscalationEmbed(updated)], components: [] });
+        } catch { /* silent */ }
+      }
 
       // DM logger
       await safeDM(i.client, e.submitted_by, new EmbedBuilder()
@@ -1327,17 +1354,24 @@ async function handleSelect(i: any): Promise<void> {
         .setDescription(`Your punishment request for post \`${e.post_id}\` has been accepted.\n\n**Outcome:** User Banned\n\nYou may now unsuspend and deny post \`${e.post_id}\`.`)
         .setTimestamp(), 'escalation handled');
 
-      await i.editReply({ content: `Outcome recorded: **Accepted - User Banned**. Logger has been notified.`, embeds: [], components: [] });
+      await i.editReply({ content: `Outcome recorded: **Accepted - User Banned**. Logger has been notified.` });
       return;
     }
 
     // All other outcomes (approved, escalated, role_revoked, role_kept, takeover_resolved, takeover_pending, no_action)
-    await i.deferUpdate();
+    await i.deferReply({ ephemeral: true });
     const label = OUTCOME_LABELS[outcome] ?? outcome;
     await sql`UPDATE post_escalations SET status = 'handled', resolution_notes = ${label}, updated_at = NOW() WHERE id = ${escalationId}`;
     const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
 
-    try { await i.message.edit({ embeds: [buildEscalationEmbed(updated)], components: [] }); } catch { /* silent */ }
+    // Update the channel embed via stored message_id
+    if (e.message_id) {
+      try {
+        const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
+        const msg = await ch.messages.fetch(e.message_id);
+        await msg.edit({ embeds: [buildEscalationEmbed(updated)], components: [] });
+      } catch { /* silent */ }
+    }
 
     // DM logger
     await safeDM(i.client, e.submitted_by, new EmbedBuilder()
@@ -1346,7 +1380,7 @@ async function handleSelect(i: any): Promise<void> {
       .setDescription(`Your escalation for post \`${e.post_id}\` has been handled.\n\n**Outcome:** ${label}`)
       .setTimestamp(), 'escalation handled');
 
-    await i.editReply({ content: `Outcome recorded: **${label}**.`, embeds: [], components: [] });
+    await i.editReply({ content: `Outcome recorded: **${label}**.` });
     return;
   }
 
@@ -1366,12 +1400,10 @@ async function handleSelect(i: any): Promise<void> {
   }
 
   if (action === 'wr_tags') {
-    // customId: wr_tags:cycleId:sectionKey
     const cycleId    = parseInt(rest[0]);
     const sectionKey = rest[1];
     const tags       = i.values as string[];
 
-    // Check if Other selected — need a label
     if (tags.includes('Other')) {
       await i.showModal({
         customId: `wr_other_label:${cycleId}:${sectionKey}`,
@@ -1389,7 +1421,6 @@ async function handleSelect(i: any): Promise<void> {
   if (action === 'suggest_type_sel') {
     const type = i.values[0];
     if (type === 'department') {
-      // Check limit
       const open = await sql`SELECT COUNT(*) as count FROM suggestions WHERE submitted_by = ${i.user.id} AND status IN ('pending','considered') AND suggestion_type = 'department'`;
       if (parseInt(open[0].count) >= 2) { await i.reply({ embeds: [errorEmbed('You already have 2 open department suggestions.')], ephemeral: true }); return; }
       await i.showModal({ customId: 'suggest_modal:department', title: 'Department Suggestion', components: [
@@ -1416,7 +1447,6 @@ async function handleSelect(i: any): Promise<void> {
     const sessionId  = parseInt(rest[0]);
     const reviewType = i.values[0];
 
-    // Modal step 1: posts reviewed count
     await i.showModal({
       customId: `session_count_modal:${sessionId}:${reviewType}`,
       title: 'Session Summary — Step 1',
@@ -1473,7 +1503,6 @@ async function handleSelect(i: any): Promise<void> {
       ON CONFLICT (vote_id, voter_id) DO UPDATE SET candidate_id = ${candidateId}, anonymous = ${isAnon}
     `;
 
-    // Update vote count
     const [countRow] = await sql`SELECT COUNT(*) as count FROM vote_entries WHERE vote_id = ${voteId}`;
     try {
       const ch = await i.client.channels.fetch(vote.channel_id) as TextChannel;
@@ -1499,7 +1528,6 @@ async function handleModal(i: any): Promise<void> {
     const postsRaw   = i.fields.getTextInputValue('posts_reviewed').trim();
     const posts      = parseInt(postsRaw) || 0;
 
-    // Can't open modal from modal — store count and show button to continue
     await sql`
       INSERT INTO weekly_report_pending (user_id, cycle_id, section_issues, step)
       VALUES (${i.user.id}, 0, ${String(posts)}, ${reviewType})
@@ -1528,7 +1556,6 @@ async function handleModal(i: any): Promise<void> {
     const sessions = await sql`SELECT * FROM spa_log_sessions WHERE id = ${sessionId} AND user_id = ${i.user.id}`;
     if (sessions.length === 0) { await i.editReply({ embeds: [errorEmbed('Session not found.')] }); return; }
 
-    // Collect IDs from whichever fields were filled
     const allIds: string[] = [];
     try {
       const userIds    = i.fields.getTextInputValue('user_ids').split('\n').map((s: string) => s.trim()).filter(Boolean);
@@ -1539,21 +1566,18 @@ async function handleModal(i: any): Promise<void> {
       allIds.push(...channelIds);
     } catch { /* field not present */ }
 
-    // Close session and post summary
     await sql`UPDATE spa_log_sessions SET status = 'completed', completed_at = NOW() WHERE id = ${sessionId}`;
 
     const today  = new Date().toISOString().split('T')[0];
     const dayLog = await sql`SELECT * FROM spa_daily_logs WHERE user_id = ${i.user.id} AND log_date = ${today}`;
     const cfg    = await getConfig(i.user.id);
 
-    // Mark done_clicked
     await sql`
       INSERT INTO spa_daily_logs (user_id, log_date, done_clicked)
       VALUES (${i.user.id}, ${today}, true)
       ON CONFLICT (user_id, log_date) DO UPDATE SET done_clicked = true
     `;
 
-    // Check underperform
     const submitted = dayLog[0]?.submitted || 0;
     const underperformThreshold = Math.floor((cfg.soft_target * (cfg.underperform_pct || 50)) / 100);
     if (submitted < underperformThreshold) {
@@ -1567,7 +1591,6 @@ async function handleModal(i: any): Promise<void> {
 
     await postSessionSummary(i.client, i.user.id, sessionId, reviewType, allIds, posts);
 
-    // Update the DM message
     try { await updateSessionDM(i.client, i.user.id); } catch { /* silent */ }
 
     await i.editReply({ embeds: [successEmbed('Session Submitted', `Your session summary has been submitted. ${submitted} log(s) recorded today.`)] });
@@ -1580,7 +1603,6 @@ async function handleModal(i: any): Promise<void> {
     const severity   = rest[1] ?? 'minor';
     const isQuota    = rest[2] === 'quota';
 
-    // For quota: post_id field holds the date, separate posts_reviewed field
     const quotaDate        = isQuota ? i.fields.getTextInputValue('post_id').trim() : null;
     const postId           = isQuota ? `QUOTA-${quotaDate}` : i.fields.getTextInputValue('post_id').trim();
     const logDate          = isQuota ? quotaDate! : i.fields.getTextInputValue('date').trim();
@@ -1763,7 +1785,6 @@ async function handleModal(i: any): Promise<void> {
     if (!pending) { await i.editReply({ embeds: [errorEmbed('Log not found.')] }); return; }
     await sql`UPDATE pending_logs SET severity = ${sevRaw} WHERE id = ${pendingId}`;
 
-    // Update the embed in HPA channel
     try {
       const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
       const msgs = await ch.messages.fetch({ limit: 50 });
@@ -1786,8 +1807,17 @@ async function handleModal(i: any): Promise<void> {
 
     await sql`DELETE FROM pending_logs WHERE id = ${pendingId}`;
     await sql`DELETE FROM used_post_ids WHERE post_id = ${pending.post_id}`;
-    await safeDM(i.client, pending.logged_by, warningEmbed(`Log Denied - Post ID: ${pending.post_id}`, `Your log against <@${pending.user_id}> was denied.\n\n**Reason:** ${reason}`), 'log denied');
-    // Track in SPA audit
+    await safeDM(i.client, pending.logged_by, new EmbedBuilder()
+      .setColor(Colors.Red)
+      .setTitle('Log Denied')
+      .addFields(
+        { name: 'User',     value: `<@${pending.user_id}>`,                                                               inline: true },
+        { name: 'Post ID',  value: `\`${pending.post_id}\``,                                                             inline: true },
+        { name: 'Severity', value: (pending.severity ?? 'minor').charAt(0).toUpperCase() + (pending.severity ?? 'minor').slice(1), inline: true },
+        { name: 'Reason logged', value: pending.reason },
+        { name: 'Denial reason', value: reason },
+      )
+      .setTimestamp(), 'log denied');
     try {
       const today = new Date().toISOString().split('T')[0];
       await sql`INSERT INTO spa_daily_logs (user_id, log_date, submitted, denied) VALUES (${pending.logged_by}, ${today}, 1, 1) ON CONFLICT (user_id, log_date) DO UPDATE SET submitted = spa_daily_logs.submitted + 1, denied = spa_daily_logs.denied + 1`;
@@ -1805,7 +1835,6 @@ async function handleModal(i: any): Promise<void> {
 
     await sql`UPDATE pending_logs SET reason = ${reason} WHERE id = ${pendingId}`;
 
-    // Update embed in HPA channel - preserve severity and buttons
     try {
       const ch = await i.client.channels.fetch(config.channels.hpaReview) as TextChannel;
       const msgs = await ch.messages.fetch({ limit: 50 });
@@ -1840,7 +1869,6 @@ async function handleModal(i: any): Promise<void> {
 
     await i.deferUpdate().catch(() => {});
 
-    // Clear buttons from original message
     try { if (i.message) await i.message.edit({ components: [] }); } catch { /* silent */ }
 
     await submitAssessmentAnswer(i, sessionId, questionId, answer, reason, session);
@@ -1856,7 +1884,6 @@ async function handleModal(i: any): Promise<void> {
     const [result]       = await sql`SELECT * FROM assessment_results WHERE id = ${resultId}`;
     if (!result) { await i.editReply({ embeds: [errorEmbed('Not found.')] }); return; }
 
-    // Process per-question overrides e.g. "Q1=correct,Q3=incorrect"
     if (qOverridesRaw) {
       const responses = await sql`
         SELECT r.id FROM assessment_responses r
@@ -1873,7 +1900,6 @@ async function handleModal(i: any): Promise<void> {
           }
         }
       }
-      // Recalculate score from overrides
       const allResponses = await sql`SELECT is_correct, override_correct FROM assessment_responses WHERE session_id = ${result.session_id}`;
       let newScore = 0;
       for (const r of allResponses) {
@@ -1926,7 +1952,6 @@ async function handleModal(i: any): Promise<void> {
     const games = gamesRaw.split(',').map((g: string) => g.trim()).filter(Boolean);
     await sql`UPDATE game_nights SET title = ${title}, scheduled_at = ${scheduledAt.toISOString()}, games = ${games}, description = ${desc} WHERE id = ${nightId}`;
 
-    // Update announcement embed if it exists
     const nights = await sql`SELECT * FROM game_nights WHERE id = ${nightId}`;
     if (nights.length > 0 && nights[0].announcement_message_id) {
       try {
@@ -1955,14 +1980,12 @@ async function handleModal(i: any): Promise<void> {
       : null;
     const m = i.member as GuildMember;
 
-    // Validate post ID format: numbers only, or 'a' followed by numbers
     const validPostId = /^\d+$/.test(postId) || /^a\d+$/.test(postId);
     if (!validPostId) {
       await i.editReply({ embeds: [errorEmbed('Invalid Post ID. Must be numbers only (e.g. `123456`) or a letter a followed by numbers (e.g. `a123456`).')] });
       return;
     }
 
-    // Validate user ID for punishment requests
     if (actionType === 'punishment_request') {
       if (!rawUserId || !/^\d{17,20}$/.test(rawUserId)) {
         await i.editReply({ embeds: [errorEmbed('Invalid User ID. Must be a Discord user ID (17-20 digits).')] });
@@ -1976,7 +1999,6 @@ async function handleModal(i: any): Promise<void> {
       return;
     }
 
-    // Build full information string
     let fullInfo = information;
     if (rawUserId) fullInfo = `User ID: \`${rawUserId}\`\n\n${information}`;
     if (evidence) fullInfo += `\n\n**Evidence:**\n${evidence}`;
@@ -2020,7 +2042,6 @@ async function handleModal(i: any): Promise<void> {
     await sql`UPDATE post_escalations SET status = 'handled', resolution_notes = ${resolutionNotes}, updated_at = NOW() WHERE id = ${escalationId}`;
     const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
 
-    // Update embed in escalations channel
     if (e.message_id) {
       try {
         const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
@@ -2029,7 +2050,6 @@ async function handleModal(i: any): Promise<void> {
       } catch { /* silent */ }
     }
 
-    // DM logger based on outcome
     if (outcome === 'denied') {
       await safeDM(i.client, e.submitted_by, new EmbedBuilder()
         .setColor(Colors.Red)
@@ -2052,12 +2072,31 @@ async function handleModal(i: any): Promise<void> {
     const newStatus    = rest[1];
     const notes        = i.fields.getTextInputValue('notes').trim();
 
-    await i.deferUpdate().catch(() => {});
+    await i.deferReply({ ephemeral: true });
 
+    const [eRow] = await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`;
     await sql`UPDATE post_escalations SET status = ${newStatus}, resolution_notes = ${notes}, updated_at = NOW() WHERE id = ${escalationId}`;
     const updated = (await sql`SELECT * FROM post_escalations WHERE id = ${escalationId}`)[0];
 
-    try { await i.message.edit({ embeds: [buildEscalationEmbed(updated)], components: [] }); } catch { /* silent */ }
+    // Update the channel embed via stored message_id
+    if (eRow?.message_id) {
+      try {
+        const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
+        const msg = await ch.messages.fetch(eRow.message_id);
+        await msg.edit({ embeds: [buildEscalationEmbed(updated)], components: [] });
+      } catch { /* silent */ }
+    }
+
+    // DM submitter about rejection
+    if (eRow) {
+      await safeDM(i.client, eRow.submitted_by, new EmbedBuilder()
+        .setColor(Colors.Red)
+        .setTitle('Escalation Rejected')
+        .setDescription(`Your escalation for post \`${eRow.post_id}\` has been rejected.\n\n**Notes:** ${notes}`)
+        .setTimestamp(), 'escalation rejected');
+    }
+
+    await i.editReply({ content: `Escalation marked as **${newStatus}**. Logger has been notified.` });
   }
 
   // ─── FEEDBACK MODALS ──────────────────────────────────────────────────────
@@ -2071,7 +2110,6 @@ async function handleModal(i: any): Promise<void> {
     const department   = i.fields.getTextInputValue('department').trim();
     const improvements = i.fields.getTextInputValue('improvements').trim();
 
-    // Save to pending
     await sql`
       INSERT INTO feedback_pending (user_id, round_id, general_thoughts, department_feedback, improvement_suggestions)
       VALUES (${i.user.id}, ${roundId}, ${general}, ${department}, ${improvements})
@@ -2079,7 +2117,6 @@ async function handleModal(i: any): Promise<void> {
       SET general_thoughts = ${general}, department_feedback = ${department}, improvement_suggestions = ${improvements}, updated_at = NOW()
     `;
 
-    // Can't open modal from modal — show a button to continue to ratings
     const rateBtn = new ButtonBuilder()
       .setCustomId(`fb_rate_trigger:${roundId}`)
       .setLabel('Continue — Rate the Department')
@@ -2106,7 +2143,6 @@ async function handleModal(i: any): Promise<void> {
       custom: parseRating(i.fields.getTextInputValue('custom')),
     };
 
-    // Update pending with ratings
     await sql`
       UPDATE feedback_pending SET
         rating_department = ${ratings.dept}, rating_resources = ${ratings.res},
@@ -2118,7 +2154,6 @@ async function handleModal(i: any): Promise<void> {
     const pending = (await sql`SELECT * FROM feedback_pending WHERE user_id = ${i.user.id} AND round_id = ${roundId}`)[0];
     if (!pending) { await i.reply({ embeds: [errorEmbed('Session expired. Please start again.')], ephemeral: true }); return; }
 
-    // Show preview with confirm/edit buttons
     const confirmBtn = new ButtonBuilder().setCustomId(`fb_confirm:${roundId}`).setLabel('✅ Confirm & Submit').setStyle(ButtonStyle.Success);
     const editBtn    = new ButtonBuilder().setCustomId(`fb_edit:${roundId}`).setLabel('✏️ Edit').setStyle(ButtonStyle.Secondary);
 
@@ -2214,7 +2249,6 @@ async function handleModal(i: any): Promise<void> {
     const note = i.fields.getTextInputValue('note').trim();
     await sql`INSERT INTO escalation_notes (escalation_id, added_by, note) VALUES (${escalationId}, ${i.user.id}, ${note})`;
 
-    // Add Show Notes button to the message if not already there
     try {
       const btns = i.message?.components?.[0]?.components ?? [];
       const hasNoteBtn = btns.some((b: any) => b.customId?.startsWith('esc_show_notes'));
@@ -2257,10 +2291,8 @@ async function handleModal(i: any): Promise<void> {
     await sql`UPDATE suggestions SET status = 'declined', rejection_reason = ${reason}, reviewed_by = ${i.user.id}, updated_at = NOW() WHERE id = ${suggId}`;
     const updated = (await sql`SELECT * FROM suggestions WHERE id = ${suggId}`)[0];
 
-    // Update thread message (remove buttons)
     try { await i.message.edit({ embeds: [buildSuggestionEmbed(updated)], components: [] }); } catch { /* silent */ }
 
-    // Update original channel message
     if (sug.message_id) {
       try {
         const ch = await i.client.channels.fetch(config.channels.suggestions) as TextChannel;
@@ -2269,7 +2301,6 @@ async function handleModal(i: any): Promise<void> {
       } catch { /* silent */ }
     }
 
-    // DM submitter
     const dmSent = await dmUser(i.client, sug.submitted_by, {
       embeds: [new EmbedBuilder().setColor(Colors.Orange).setTitle('💡 Suggestion Update').setDescription(`Your suggestion **${sug.title}** has been declined.\n\n**Reason:** ${reason}`).setTimestamp()]
     });
@@ -2293,7 +2324,6 @@ async function handleModal(i: any): Promise<void> {
     await i.deferUpdate().catch(() => {});
     try { await i.message.edit({ embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle("❌ Can't Do — Noted").setDescription('Your response has been logged and forwarded to HPA.').setTimestamp()], components: [] }); } catch { /* silent */ }
 
-    // Check if flagged
     const flagStatus = await sql`SELECT * FROM spa_cant_do_flags WHERE user_id = ${userId}`;
     const isFlagged  = flagStatus[0]?.flagged ?? false;
 
@@ -2342,7 +2372,6 @@ async function handleModal(i: any): Promise<void> {
     const mistakes = i.fields.getTextInputValue('mistakes').trim();
     const weaknesses = i.fields.getTextInputValue('weaknesses').trim();
 
-    // Quality check
     const banned = ['no issues', 'everything fine', 'n/a', 'nothing', 'all good', 'no problems', 'all fine', 'none', 'all clear'];
     const failed: string[] = [];
     if ([issues, mistakes, weaknesses].some(t => banned.some(b => t.toLowerCase().includes(b)))) {
@@ -2361,7 +2390,6 @@ async function handleModal(i: any): Promise<void> {
       return;
     }
 
-    // Save to pending
     await sql`
       INSERT INTO weekly_report_pending (user_id, cycle_id, section_issues, section_mistakes, section_weaknesses, step)
       VALUES (${i.user.id}, ${cycleId}, ${issues}, ${mistakes}, ${weaknesses}, 'tags1')
@@ -2423,7 +2451,6 @@ async function handleModal(i: any): Promise<void> {
     await showNextTagsOrModal(i, cycleId, sectionKey);
   }
 
-  // ─── TAG MODALS ────────────────────────────────────────────────────────────
   else if (action === 'severity_guide_modal') {
     await i.deferReply({ ephemeral: true });
     const minor    = i.fields.getTextInputValue('minor').trim();
@@ -2476,7 +2503,6 @@ async function handleModal(i: any): Promise<void> {
     await i.editReply({ embeds: [successEmbed('Tag Updated', `**${tag?.name}** updated.`)] });
   }
 
-  // ─── GAME NIGHT RATE MODAL ─────────────────────────────────────────────────
   else if (action === 'gn_rate_modal') {
     await i.deferReply({ ephemeral: true });
     const nightId  = parseInt(rest[0]);
@@ -2485,7 +2511,6 @@ async function handleModal(i: any): Promise<void> {
 
     await sql`INSERT INTO game_night_feedback (game_night_id, user_id, rating, comment) VALUES (${nightId}, ${i.user.id}, ${rating}, ${comment}) ON CONFLICT DO NOTHING`;
 
-    // Check if all attendees rated
     const rsvps    = await sql`SELECT user_id FROM game_night_rsvps WHERE game_night_id = ${nightId} AND attending = true`;
     const feedback = await sql`SELECT user_id FROM game_night_feedback WHERE game_night_id = ${nightId}`;
     const rsvpIds  = new Set(rsvps.map((r: any) => r.user_id));
@@ -2496,15 +2521,6 @@ async function handleModal(i: any): Promise<void> {
     }
 
     await i.editReply({ embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('Thanks for the feedback!').setDescription(`You rated this game night **${rating}/5**.${comment ? `\n\nComment: ${comment}` : ''}`).setTimestamp()] });
-  }
-
-  // ─── ESC NOTE MODAL ────────────────────────────────────────────────────────
-  else if (action === 'esc_note_modal') {
-    await i.deferReply({ ephemeral: true });
-    const escalationId = parseInt(rest[0]);
-    const note = i.fields.getTextInputValue('note').trim();
-    await sql`INSERT INTO escalation_notes (escalation_id, added_by, note) VALUES (${escalationId}, ${i.user.id}, ${note})`;
-    await i.editReply({ embeds: [successEmbed('Note Added', 'Your note has been saved.')] });
   }
 }
 
@@ -2542,13 +2558,11 @@ async function showNextTagsOrModal(i: any, cycleId: number, currentSection: stri
     const next = section1Flow[idx1 + 1];
     await i.editReply({ content: `Tags saved! Now tag: **${sectionLabels[next]}**`, components: [buildTagSelect(next, cycleId, sectionLabels[next])] }).catch(() => {});
   } else if (currentSection === 'weaknesses') {
-    // Done with part 1 tags — show modal 2
     await i.editReply({ content: 'Tags for Part 1 saved! Now complete Part 2:', components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`wr_modal2_trigger:${cycleId}`).setLabel('📝 Continue to Part 2').setStyle(ButtonStyle.Primary))] }).catch(() => {});
   } else if (idx2 >= 0 && idx2 < section2Flow.length - 1) {
     const next = section2Flow[idx2 + 1];
     await i.editReply({ content: `Tags saved! Now tag: **${sectionLabels[next]}**`, components: [buildTagSelect(next, cycleId, sectionLabels[next])] }).catch(() => {});
   } else if (currentSection === 'suggestions') {
-    // Done with all tags — show preview
     const pending = (await sql`SELECT * FROM weekly_report_pending WHERE user_id = ${i.user.id} AND cycle_id = ${cycleId}`)[0];
     if (!pending) return;
 
@@ -2648,7 +2662,6 @@ async function handleStaffProfileButton(i: any, action: string, rest: string[]):
     return;
   }
 
-  // sp_next, sp_prev, sp_back — need to re-fetch the target member
   const targetId = rest[0];
   let mp = parseInt(rest[1]) || 0;
   let sp = parseInt(rest[2]) || 0;
@@ -2718,7 +2731,6 @@ async function submitAssessmentAnswer(i: any, sessionId: number, questionId: num
     ? session.question_order.map(Number)
     : JSON.parse(session.question_order).map(Number);
 
-  // Clear buttons on DM message
   try {
     if (i.isButton?.() && !i.replied) await i.update({ components: [] });
     else if (i.message) await i.message.edit({ components: [] }).catch(() => {});
@@ -2729,7 +2741,6 @@ async function submitAssessmentAnswer(i: any, sessionId: number, questionId: num
 
 // ─── MILESTONE DM ────────────────────────────────────────────────────────────
 async function sendMilestoneDM(client: any, userId: string): Promise<void> {
-  // Only count moderate/severe mistakes for milestone DMs
   const rows = await sql`
     SELECT COUNT(*) as count FROM logs
     WHERE user_id = ${userId} AND type = 'mistake' AND expires_at > NOW()
@@ -2745,9 +2756,7 @@ async function sendMilestoneDM(client: any, userId: string): Promise<void> {
     .setColor(Colors.Orange)
     .setTitle('Mistake Notification')
     .setDescription(
-      `You currently have **${count} active moderate/severe mistake(s)**.
-
-` +
+      `You currently have **${count} active moderate/severe mistake(s)**.\n\n` +
       (remaining > 0 ? `You are **${remaining} mistake(s) away** from receiving a strike.` : 'You are at the escalation threshold.')
     )
     .setTimestamp();
