@@ -71,6 +71,8 @@ import * as bulkActions from '../commands/hpa/bulk_actions';
 import * as manageLogTracker from '../commands/hpa/manage_log_tracker';
 import * as assessment from '../commands/hpa/assessment';
 import * as severityGuide from '../commands/hpa/severity_guide';
+import * as manageDenialReasons from '../commands/hpa/manage_denial_reasons';
+import { handleDenialReasonsInteraction } from '../commands/hpa/manage_denial_reasons';
 import * as postTrain from '../commands/shared/post_train';
 import * as trainAi from '../commands/spa/train_ai';
 import { handlePostTrainInteraction } from './postTrainHandler';
@@ -100,6 +102,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
   manage_log_tracker: manageLogTracker,
   assessment, severity_guide: severityGuide,
+  'manage-denial-reasons': manageDenialReasons,
 };
 
 export async function handleInteraction(interaction: Interaction): Promise<void> {
@@ -145,8 +148,14 @@ async function handleButton(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
   // Post training buttons
-  if (action === 'pt_action' || action === 'pt_continue' || action === 'pt_end') {
+  if (action === 'pt_action' || action === 'pt_deny_open' || action === 'pt_continue' || action === 'pt_end') {
     await handlePostTrainInteraction(i); return;
+  }
+
+  // Denial reasons management buttons
+  if (action === 'dr_remove_confirm' || action === 'dr_remove_cancel') {
+    if (action === 'dr_remove_cancel') { await i.update({ embeds: [new EmbedBuilder().setColor(Colors.Blue).setDescription('Removal cancelled.')], components: [] }); return; }
+    await handleDenialReasonsInteraction(i); return;
   }
 
   // Staff profile pagination buttons
@@ -1313,8 +1322,13 @@ async function handleSelect(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
   // Post training category select
-  if (i.customId === 'pt_category_select') {
+  if (i.customId === 'pt_category_select' || i.customId.startsWith('pt_deny_sel:')) {
     await handlePostTrainInteraction(i); return;
+  }
+
+  // Denial reasons management selects
+  if (i.customId.startsWith('dr_')) {
+    await handleDenialReasonsInteraction(i); return;
   }
 
   if (action === 'esc_outcome_sel') {
@@ -1522,6 +1536,11 @@ async function handleSelect(i: any): Promise<void> {
 // ─── MODAL HANDLER ────────────────────────────────────────────────────────────
 async function handleModal(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
+
+  // Denial reasons management modals
+  if (action === 'dr_add_modal' || action === 'dr_edit_modal') {
+    await handleDenialReasonsInteraction(i); return;
+  }
 
   if (action === 'session_count_modal') {
     await i.deferReply({ ephemeral: true });

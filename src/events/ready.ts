@@ -1,6 +1,7 @@
 import { Client } from 'discord.js';
 import { runStartupChecks, startScheduler, startMinuteScheduler } from '../utils/scheduler';
 import { sql } from '../database/client';
+import { seedDenialReasons } from '../services/postTrainService';
 
 export async function onReady(client: Client): Promise<void> {
   console.log(`✅ Logged in as ${client.user?.tag}`);
@@ -10,6 +11,7 @@ export async function onReady(client: Client): Promise<void> {
   } catch (e) {
     console.error('❌ Database connection failed:', e);
   }
+  await seedDenialReasons();
   await runStartupChecks(client);
   startScheduler(client);
   startMinuteScheduler(client);
