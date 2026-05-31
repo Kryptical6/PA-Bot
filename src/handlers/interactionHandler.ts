@@ -72,6 +72,7 @@ import * as manageLogTracker from '../commands/hpa/manage_log_tracker';
 import * as assessment from '../commands/hpa/assessment';
 import * as severityGuide from '../commands/hpa/severity_guide';
 import * as postTrain from '../commands/shared/post_train';
+import * as trainAi from '../commands/spa/train_ai';
 import { handlePostTrainInteraction } from './postTrainHandler';
 
 const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Promise<void> }> = {
@@ -84,6 +85,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   set_reminder: setReminder, send_tag: sendTag,
   remind, 'bot-bug': botBug,
   'post-train': postTrain,
+  'train-ai': trainAi,
   import_assessment_questions: importAssessmentQ,
   escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,

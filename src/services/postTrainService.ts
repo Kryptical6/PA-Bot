@@ -28,10 +28,93 @@ export interface GeneratedPost {
   member_since:   string;
   has_reviews:    boolean;
   post_id:        string;
-  correct_action: 'approve' | 'deny' | 'suspend' | 'request_pof';
+  correct_action: 'approve' | 'deny' | 'request_pof';
   violation:      string | null;
   explanation:    string;
   difficulty:     'easy' | 'medium' | 'hard';
+}
+
+// Random variation seeds injected per call so the model cannot settle into a pattern
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function buildVariationSeed(): string {
+  const writerStyles = [
+    'bullet points with dashes',
+    'short paragraphs with no bullets',
+    'a single flowing paragraph',
+    'numbered sections',
+    'bold headers for each section',
+    'casual conversational tone with no formatting',
+    'formal business-like tone',
+    'very short and terse with minimal words',
+    'overly detailed with lots of context',
+  ];
+
+  const contactMethods = [
+    'DM me on Discord',
+    'ping me in this server',
+    'reply to this post',
+    'contact me via my portfolio link',
+    'message me on Roblox',
+    'no contact method mentioned',
+  ];
+
+  const priceFormats = [
+    'exact Robux amount (e.g. 2,500 Robux)',
+    'USD amount (e.g. $15 USD)',
+    'a range in Robux (e.g. 1,000 to 2,500 Robux)',
+    'a range in USD (e.g. $10 to $25 USD)',
+    'per-asset pricing (e.g. 500 Robux per icon)',
+    'a percentage of revenue plus a fixed base',
+    'negotiable with a stated minimum',
+    'a high amount triggering POF (e.g. 35,000 Robux or $220 USD)',
+    'percentage only with no fixed price (violation)',
+    'no payment stated at all (violation)',
+  ];
+
+  const developerRoles = [
+    'scripter', 'GFX designer', 'UI/UX designer', 'low-poly modeler',
+    'high-poly modeler', 'animator', 'VFX artist', 'sound designer',
+    'SFX composer', 'video editor', 'thumbnail artist', 'logo designer',
+    'clothing designer', 'map builder', 'terrain artist',
+  ];
+
+  const postTitles = [
+    'a first-person title ("I am a scripter for hire")',
+    'a third-person description ("Experienced GFX designer available")',
+    'a short noun phrase ("Scripting Services")',
+    'an attention-grabbing opener ("Quality UI at fair prices")',
+    'a plain factual header ("For Hire: Animator")',
+  ];
+
+  const memberDurations = [
+    '3 weeks ago', '2 months ago', '5 months ago', '8 months ago',
+    '11 months ago', '14 months ago', '18 months ago', '22 months ago',
+  ];
+
+  const portfolioStyles = [
+    'two YouTube links for video examples',
+    'an Imgur album link',
+    'a Google Drive folder link',
+    'a personal portfolio website',
+    'inline description of past projects with no links',
+    'a Devforum portfolio thread',
+    'no portfolio provided (possible violation)',
+    'one example only (possible violation if 2 required)',
+    'three strong streaming examples',
+  ];
+
+  return [
+    `Post writing style: ${pickRandom(writerStyles)}.`,
+    `Contact method used: ${pickRandom(contactMethods)}.`,
+    `Payment format: ${pickRandom(priceFormats)}.`,
+    `Developer role/service: ${pickRandom(developerRoles)}.`,
+    `Title style: ${pickRandom(postTitles)}.`,
+    `Account age context: member joined roughly ${pickRandom(memberDurations)}.`,
+    `Portfolio/examples style: ${pickRandom(portfolioStyles)}.`,
+  ].join(' ');
 }
 
 // GENERATE POST VIA GPT-4o-mini
@@ -46,7 +129,16 @@ export async function generateTrainingPost(category: string): Promise<GeneratedP
   const difficulty: 'easy' | 'medium' | 'hard' =
     difficultyRoll < 0.33 ? 'easy' : difficultyRoll < 0.66 ? 'medium' : 'hard';
 
-  const systemPrompt = buildSystemPrompt();
+  // Load up to 5 senior-submitted training examples for this category
+  const exampleRows = await sql`
+    SELECT post_body, correct_action, reasoning
+    FROM post_train_examples
+    WHERE category = ${actualCategory} AND active = true
+    ORDER BY RANDOM()
+    LIMIT 5
+  `.catch(() => []);
+
+  const systemPrompt = buildSystemPrompt(exampleRows as any[]);
   const userPrompt   = buildUserPrompt(actualCategory, difficulty);
 
   try {
@@ -58,8 +150,8 @@ export async function generateTrainingPost(category: string): Promise<GeneratedP
       },
       body: JSON.stringify({
         model:       'gpt-4o-mini',
-        max_tokens:  1200,
-        temperature: 0.9,
+        max_tokens:  1400,
+        temperature: 1.0,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: userPrompt   },
@@ -86,8 +178,19 @@ export async function generateTrainingPost(category: string): Promise<GeneratedP
 }
 
 // SYSTEM PROMPT
-function buildSystemPrompt(): string {
+function buildSystemPrompt(examples: { post_body: string; correct_action: string; reasoning: string }[]): string {
+  let examplesBlock = '';
+  if (examples.length > 0) {
+    examplesBlock = '\n\nSENIOR STAFF REFERENCE EXAMPLES (real reviewed posts submitted by your senior staff team - use these to calibrate tone, format, and rule application accuracy):\n';
+    examples.forEach((ex, idx) => {
+      examplesBlock += `\nExample ${idx + 1}:\nPost: ${ex.post_body}\nCorrect action: ${ex.correct_action}\nReasoning: ${ex.reasoning}\n`;
+    });
+    examplesBlock += '\nUse these examples to understand what real posts in this category look like and how rules are applied. Do NOT copy them directly - generate something new and different.';
+  }
+
   return `You are a post generator for a Roblox marketplace staff training tool called RoDevs. You generate fake but realistic marketplace posts for Post Approver trainees to review.
+
+Your output must be different every single time. Vary the writing style, structure, price, developer name, service type, number of lines, tone, and content. No two posts should feel like they came from the same template.${examplesBlock}
 
 MARKETPLACE CATEGORIES:
 - fh: For Hire - developers advertising their services
@@ -110,7 +213,7 @@ OFFICIAL RULES (must be followed exactly - from the RoDevs Post Approver Handboo
 - Low-quality or poorly described services = DENY
 - No plagiarism/stolen assets in any form
 - Tutorial work is not acceptable as a portfolio example
-- AI-generated work = SUSPEND (punishment request), unless declared as placeholder/filler
+- AI-generated work = DENY (note: this is handled as a deny, not a suspend, since post examples are not visible to the reviewer in this training context)
 - No selling games or groups
 - No free models/free vectors (unless declared placeholder/filler)
 - No exploit/virus/malware/worm related services
@@ -126,7 +229,6 @@ OFFICIAL RULES (must be followed exactly - from the RoDevs Post Approver Handboo
 - Scripting/animation/video/SFX/sound/VFX need at least 2 VIDEO examples
 - Examples must not require a download - must use streaming (e.g. YouTube)
 - No low-quality examples or phone camera photos of a screen
-- Skill role apps need proof of ownership (layers screenshot, keyframes, topology, etc.)
 
 == LOOKING FOR DEVELOPER (LFD) ==
 - Must state a clear payment or range (not just "negotiable")
@@ -191,28 +293,25 @@ OFFICIAL RULES (must be followed exactly - from the RoDevs Post Approver Handboo
 - If POF threshold is met AND the post is otherwise completely clean = correct_action is "request_pof"
 - If POF threshold is met BUT the post also has a rule violation = correct_action is "deny" (fix the violation first)
 
-== SUSPEND action ==
-- Used ONLY when there is suspected AI-generated content, free models, or stolen assets AND there is evidence mentioned in the post itself or its examples
-- NOT used for simple rule violations - those are "deny"
-- Suspension is followed by a punishment request process
-
 == APPROVE action ==
 - Post meets ALL rules, no violations, no POF threshold met
+
+IMPORTANT - correct_action must be one of: "approve", "deny", "request_pof". Do NOT use "suspend".
 
 You MUST respond with ONLY valid JSON, no markdown fences, no preamble, no extra text.
 JSON structure:
 {
   "title": "Post title",
-  "description": "Full post body (multi-line, realistic, mimics real marketplace posts)",
-  "payment": "e.g. '$5 USD' or '500 Robux' or null if not applicable (e.g. reviews)",
-  "category": "e.g. 'fh-scripting' or 'lfd-modeling' or 'skill_role-gfx' or 'sell_creations' or 'investors' or 'advertising' or 'reviews'",
+  "description": "Full post body (multi-line, realistic, varied structure - see variation seed in the user message)",
+  "payment": "stated payment string, or null if not applicable",
+  "category": "specific subcategory e.g. fh-scripting, lfd-modeling, skill_role-gfx, sell_creations, investors, advertising, reviews",
   "scam_logs": 0,
   "member_since": "DD Month YYYY",
   "has_reviews": false,
-  "post_id": "random 6-digit string",
-  "correct_action": "approve" or "deny" or "suspend" or "request_pof",
-  "violation": "short label of the rule broken, or null if correct_action is approve",
-  "explanation": "2-3 sentences explaining exactly why this action is correct, citing the specific rule",
+  "post_id": "random 6-digit number as a string",
+  "correct_action": "approve" or "deny" or "request_pof",
+  "violation": "short plain label of the rule broken, or null if correct_action is approve or request_pof with no violations",
+  "explanation": "2-3 sentences citing the exact rule from the handbook. Be precise.",
   "difficulty": "easy"
 }`;
 }
@@ -220,44 +319,108 @@ JSON structure:
 // USER PROMPT
 function buildUserPrompt(category: string, difficulty: 'easy' | 'medium' | 'hard'): string {
   const diffGuide: Record<string, string> = {
-    easy:   'Make the violation VERY obvious and immediately visible. For example: no payment at all, a Discord link right in the description, or 0 examples provided.',
-    medium: 'The post should look mostly fine at first glance. Include one clear rule violation that a trained reviewer would catch - e.g. percentage-only payment, deadline is exactly 2 days, or price range is 1.8x the base.',
-    hard:   'This is an edge case. Options: (1) A completely clean post that should be APPROVED - make it look professional and well-formed. (2) A POF post - clean but offers $250 USD or 35,000 Robux. (3) A subtle violation - e.g. price range is exactly 1.6x base, deadline is 2 days 20 hours described as "roughly 3 days", or proof of ownership is described but is actually a render not a layer screenshot. (4) A SUSPEND case - post mentions AI-generated examples or a reverse image search note in the description.',
+    easy: [
+      'The violation must be unmissable. Pick one: no payment whatsoever, a Discord invite link directly in the post body, zero examples where examples are required, deadline explicitly stated as 1 or 2 days, percentage-only payment with no fixed price, or a clear statement that the developer is posting on behalf of someone else.',
+      'Write the post as if the author is oblivious to the rules. The violation should be in the first 2 sentences.',
+    ].join(' '),
+    medium: [
+      'The post should look mostly legitimate at first glance. The violation is there but requires knowledge of the rules to catch.',
+      'Good options: price range that is 1.7x or 1.8x the base (the rule allows up to 1.5x), deadline described as "around 48 hours" or "just under 3 days", payment described as negotiable with a vague minimum but no actual figure, only one example provided where two are required, or a percentage plus a fixed price where the fixed price is actually below minimum reasonable compensation.',
+      'Alternatively, write a completely clean post that should be approved - reviewers must learn to not over-deny.',
+    ].join(' '),
+    hard: [
+      'This is an edge case that will challenge even experienced reviewers. Choose one scenario:',
+      '(1) A completely clean, professional, well-formatted post that is 100% correct and should be approved - make it look real and convincing.',
+      '(2) A POF post - everything is clean and well-written but the payment is $220 USD or 35,000 Robux, which crosses the POF threshold.',
+      '(3) A subtle rule violation that is easy to miss - e.g. price range described as "1,000 to 1,600 Robux" where base is 1,000 (1.6x, over the 1.5x limit), or a deadline of "roughly 72 hours" that is technically exactly 3 days but phrased ambiguously, or proof of ownership described as a rendered image rather than a process screenshot.',
+      '(4) A multi-hire post where two different roles are described in one post, which is easy to miss if you focus on payment.',
+      'For hard posts leaning towards approve or request_pof: reviewers commonly over-deny clean posts, so this is valuable training.',
+    ].join(' '),
   };
 
-  const actionGuide: Record<string, string> = {
-    easy:   'correct_action should almost always be "deny".',
-    medium: 'correct_action can be "deny", "approve", or "request_pof". Mix it up.',
-    hard:   'correct_action can be anything. Lean towards "approve" or "request_pof" for hard - a common training failure is denying clean posts.',
+  const violationPool: Record<string, string[]> = {
+    fh: [
+      'no payment stated', 'percentage-only payment', 'price range exceeds 1.5x base',
+      'Discord server link included', 'only one example provided (minimum is two)',
+      'tutorial used as a portfolio example', 'commission finder (posting for someone else)',
+      'multi-hire (two services in one post)', 'plugin for sale',
+      'no examples at all', 'downloadable file as the only example',
+    ],
+    lfd: [
+      'deadline under 3 days', 'no payment stated', 'percentage-only payment',
+      'underpayment (well below market rate)', 'Discord server link',
+      'two roles in one post', '2 scam logs', 'commission finder',
+    ],
+    skill_role: [
+      'no proof of ownership', 'tutorial used as example', 'only one example',
+      'downloadable file instead of streaming link', 'no Roblox account linked for game role',
+    ],
+    sell_creations: [
+      'selling a game', 'selling a scripted map', 'only one example', '1 scam log',
+      'no examples', 'downloadable file',
+    ],
+    investors: [
+      'revenue share below 15%', 'revenue share at 95% (effectively selling the game)',
+      'fewer than 5 images', 'game less than 55% complete with no link',
+      'off-platform game', '1 scam log', 'no fixed investment amount stated',
+    ],
+    advertising: [
+      'private or unpublished game', 'AFK game', 'off-platform product', 'service advertised instead of a game',
+    ],
+    reviews: [
+      'no payment proof', 'no proof of what was received', 'scam report instead of a review',
+      'vulgar or insulting language', 'transaction was not on RoDevs',
+    ],
   };
+
+  const baseCategory = category.split('-')[0] as keyof typeof violationPool;
+  const violations   = violationPool[baseCategory] ?? violationPool['fh'];
+  const pickedViolation = difficulty === 'easy'
+    ? pickRandom(violations.slice(0, 5))
+    : difficulty === 'medium'
+    ? pickRandom(violations)
+    : pickRandom(violations);
 
   const catGuide: Record<string, string> = {
-    fh:             'Generate a For Hire post where a developer is advertising their services (e.g. scripting, GFX, UI, modeling, animation, music, VFX, video editing).',
-    lfd:            'Generate a Looking For Developer post where someone wants to hire a developer for their project.',
-    skill_role:     'Generate a Skill Role Application. The person is applying for a role (e.g. Scripter, GFX Designer, Animator) by submitting examples and proof of ownership.',
-    sell_creations: 'Generate a Sell Creations post where someone is selling a ready-made asset (e.g. a GUI, a map, a UI kit, a scripted system, a 3D model).',
-    investors:      'Generate an Investor Post where a developer is seeking financial investment for their Roblox game in development.',
-    advertising:    'Generate a Roblox Advertising post where someone is advertising their Roblox game or group.',
-    reviews:        'Generate a Review post where someone is leaving feedback about a completed transaction with a developer.',
+    fh:             'A developer advertising their own services. Pick a specific niche: scripting, GFX, UI, low-poly modeling, high-poly modeling, animation, VFX, SFX, video editing, thumbnail art, or clothing design.',
+    lfd:            'A project owner looking to hire a developer. Include a project description, the role needed, budget, and a deadline.',
+    skill_role:     'A developer applying for a skill role on RoDevs. They need to prove ownership of their work with process screenshots or equivalent proof.',
+    sell_creations: 'A developer selling a ready-made asset: a GUI kit, a weapon system, a map, a UI template, or similar.',
+    investors:      'A developer seeking investment for a Roblox game in development. Must include revenue share offer, game progress %, and visual evidence.',
+    advertising:    'Someone advertising their public Roblox game or group to attract players.',
+    reviews:        'A user leaving feedback about a completed transaction with a developer on RoDevs. Must include proof of payment and proof of what was received.',
   };
+
+  const variationSeed = buildVariationSeed();
+
+  const actionHint =
+    difficulty === 'easy'   ? `The correct_action for this post is "deny". Violation to incorporate: ${pickedViolation}.` :
+    difficulty === 'medium' ? `Vary the correct_action. Options: deny (violation: ${pickedViolation}), approve (clean post), or request_pof (clean but high payment). Choose one and commit to it.` :
+                              `Choose the correct_action that best fits the edge case you construct. Options: approve, deny, request_pof.`;
 
   return `Generate a ${difficulty} difficulty training post for category: ${category}.
 
-${catGuide[category] ?? catGuide['fh']}
+Category context: ${catGuide[baseCategory] ?? catGuide['fh']}
 
-Difficulty: ${diffGuide[difficulty]}
-Action guidance: ${actionGuide[difficulty]}
+Difficulty instructions: ${diffGuide[difficulty]}
 
-Additional rules:
-- description must look like a REAL marketplace post with realistic Roblox developer language. Include services, examples, payment, contact info as appropriate. 3-10 lines.
-- scam_logs: 0 for most posts. Set to 2 for a deny-due-to-scam-logs post in fh/lfd. Set to 1 for sell_creations or investors scam-log denial.
-- member_since: a realistic date within the last 2 years.
-- has_reviews: mostly false, occasionally true.
-- violation: null if correct_action is "approve" or "request_pof" with no violations. Otherwise a SHORT plain label (e.g. "No payment stated", "Discord server link in post", "Commission deadline under 3 days", "Percentage-only payment", "No examples provided").
-- explanation: must reference the EXACT rule from the handbook. Be specific. Example: "This post uses percentage-only payment. The handbook states that percentages are not a valid standalone payment - a fixed price must also be provided."
-- The post_id should be a realistic 6-digit number.
+${actionHint}
 
-IMPORTANT: Only output the JSON object. Nothing else.`;
+Variation seed (you MUST follow all of these to ensure uniqueness):
+${variationSeed}
+
+Additional requirements:
+- The description field must be the full post body as a trainee would see it in the channel. Write it as a real Discord message - vary the length (anywhere from 3 lines to 12 lines), vary whether it uses bullets, paragraphs, or a mix.
+- Do not use generic developer names or placeholder text. If naming a game or project, invent a specific name.
+- scam_logs: 0 for most posts. Use 2 for a scam-log deny in fh/lfd. Use 1 for sell_creations or investors scam-log denial.
+- member_since: a realistic date within the last 2 years. Use the format DD Month YYYY.
+- has_reviews: mostly false.
+- violation: null only if correct_action is "approve" or "request_pof" with no other rule broken. Otherwise a short plain label.
+- explanation: cite the exact rule. Be specific and concise. 2-3 sentences maximum.
+- post_id: a realistic 6-digit number as a string.
+- difficulty in the JSON must match the requested difficulty: "${difficulty}".
+
+IMPORTANT: Output ONLY the raw JSON object. No markdown, no explanation outside the JSON.`;
 }
 
 // BUILD POST EMBED
@@ -297,7 +460,7 @@ export function buildPostEmbed(post: GeneratedPost, sessionScore: number, sessio
   return embed;
 }
 
-// BUILD ACTION BUTTONS
+// BUILD ACTION BUTTONS (no suspend - examples are not visible to the reviewer)
 export function buildPostActionRows(sessionId: number): ActionRowBuilder<ButtonBuilder>[] {
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -308,10 +471,6 @@ export function buildPostActionRows(sessionId: number): ActionRowBuilder<ButtonB
       .setCustomId(`pt_action:${sessionId}:deny`)
       .setLabel('Deny')
       .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`pt_action:${sessionId}:suspend`)
-      .setLabel('Suspend')
-      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`pt_action:${sessionId}:request_pof`)
       .setLabel('Request Proof of Funds')
@@ -332,7 +491,6 @@ export function buildFeedbackEmbed(
   const actionLabels: Record<string, string> = {
     approve:     'Approve',
     deny:        'Deny',
-    suspend:     'Suspend',
     request_pof: 'Request Proof of Funds',
   };
 
@@ -340,9 +498,9 @@ export function buildFeedbackEmbed(
     .setColor(correct ? Colors.Green : Colors.Red)
     .setTitle(correct ? 'Correct' : 'Incorrect')
     .addFields(
-      { name: 'Your Action',    value: actionLabels[userAction] ?? userAction,                              inline: true },
-      { name: 'Correct Action', value: actionLabels[post.correct_action] ?? post.correct_action,           inline: true },
-      { name: 'Post',           value: `**${post.title}** (\`${post.post_id}\`)`,                          inline: false },
+      { name: 'Your Action',    value: actionLabels[userAction] ?? userAction,                      inline: true },
+      { name: 'Correct Action', value: actionLabels[post.correct_action] ?? post.correct_action,   inline: true },
+      { name: 'Post',           value: `**${post.title}** (\`${post.post_id}\`)`,                  inline: false },
     );
 
   if (!correct && post.violation) {
