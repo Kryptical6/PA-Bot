@@ -43,90 +43,94 @@ export interface DenialReason {
 }
 
 export const DENIAL_REASONS: Record<string, DenialReason[]> = {
+  // Exact wording sourced from Module 5 (FH) and the Post Approver Handbook
   fh: [
-    { label: 'No payment stated',             message: 'Please state a valid range or fixed payment so your fees are clear to clients.' },
-    { label: '2 scam logs',                   message: '2 scam logs found. You cannot use the marketplace.' },
-    { label: 'Poor grammar or spelling',       message: 'Please ensure your description uses correct grammar and spelling.' },
-    { label: 'Commission finder',              message: 'Commission finders are prohibited on the RoDevs marketplace.' },
-    { label: 'Downloadable files',             message: 'Please remove any downloadable files. Use a streaming platform like YouTube instead.' },
-    { label: 'Discord server link',            message: 'Please do not promote your Discord server in your post.' },
-    { label: 'Multi-service post',             message: 'Multi-hiring is prohibited. Please create a separate post for each service in the correct channel.' },
-    { label: 'Not enough examples',            message: 'Please provide at least 2 visual examples of your work.' },
-    { label: 'Not enough video examples',      message: 'Please provide at least 2 video examples showcasing your work.' },
-    { label: 'Examples below quality',         message: 'Work examples do not meet our marketplace quality standards.' },
-    { label: 'Idea maker / concept creator',   message: 'Concept creators, story writers, and idea generators are prohibited from the FH category.' },
-    { label: 'No structured advertiser service', message: 'Advertisers and marketers must provide a structured explanation of their service, how they work, and what clients should expect. Generic promises of growth are not acceptable.' },
-    { label: 'Advertiser - no proof of results', message: 'Please include image or documented proof of successful campaigns you have run.' },
-    { label: 'Project manager - no workflow',  message: 'Project managers must demonstrate use of real planning systems such as task boards, schedules, or milestone tracking.' },
-    { label: 'Discord server management',      message: 'Server creation and management services are prohibited on the RoDevs marketplace.' },
-    { label: 'Game tester - no method',        message: 'Game testers must outline their testing process (bug tracking, reporting structure, scenarios, etc.).' },
-    { label: '3D rigger in wrong channel',     message: 'Incorrect channel. Please repost in fh-animation or fh-modeler.' },
-    { label: 'Incorrect channel',              message: 'Incorrect channel. Please repost this in the correct channel.' },
-  ],
-  lfd: [
-    { label: 'No payment stated',              message: 'Please state a valid range or fixed budget so developers understand what you are offering.' },
-    { label: 'Unfair / underpayment',          message: 'Please ensure you are offering fair payment for the work requested.' },
-    { label: 'Percentage-only payment',        message: 'Relying solely on a revenue percentage is prohibited. Please provide a fixed price.' },
+    { label: 'No payment / range too wide',    message: 'Please state a valid range/fixed payment, so that your fees are clear to developers.' },
     { label: '2 scam logs',                    message: '2 scam logs found. You cannot use our marketplace.' },
-    { label: 'Unclear description',            message: 'Please provide a clear description so developers know exactly what is needed.' },
-    { label: 'Poor grammar or spelling',       message: 'Please ensure your description uses correct grammar and spelling.' },
-    { label: 'Commission finder',              message: 'Commission finders are prohibited on the RoDevs marketplace.' },
-    { label: 'Downloadable files',             message: 'Please remove any downloadable files. Use YouTube or a similar streaming platform.' },
-    { label: 'Discord server link',            message: 'Please do not promote your Discord server in your post.' },
-    { label: 'Multi-hire post',                message: 'Multi-hiring is prohibited. Please create a separate post for each developer role.' },
-    { label: 'Discord server services',        message: 'Server creation/management services are prohibited on the RoDevs marketplace.' },
-    { label: '3D rigger in wrong channel',     message: 'Incorrect channel. Please repost in lfd-animation or lfd-modeler.' },
-    { label: 'Deadline under 3 days',          message: 'Commissions with a deadline under 3 days are not allowed. Please increase the deadline and repost.' },
-    { label: 'Incorrect channel',              message: 'Incorrect channel. Please repost this in the correct channel.' },
+    { label: 'Poor grammar or spelling',        message: 'Please ensure you use correct grammar/spelling in your description.' },
+    { label: 'Description too vague',           message: 'Description too vague, please elaborate on the tasks expected from the developer and repost.' },
+    { label: 'Post structure hard to read',     message: 'Description format makes it hard to read. Please provide a more structured post.' },
+    { label: 'Recruiters / commission finder',  message: 'Recruiters are prohibited on the RoDevs marketplace.' },
+    { label: 'Downloadable files',              message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
+    { label: 'Discord server link',             message: 'Please do not promote your discord server in your post.' },
+    { label: 'Multi-service post',              message: 'Multi-hiring is prohibited on the RoDevs marketplace. Please make separate posts for each service in the designated channels.' },
+    { label: 'Incorrect channel',               message: 'Incorrect channel. Please post this in [X].' },
+    { label: 'Not enough examples',             message: 'Please provide at least 2 visual examples of your work.' },
+    { label: 'Not enough video examples',       message: 'Please provide at least 2 video examples showcasing your work.' },
+    { label: 'Examples below quality',          message: 'Work examples do not meet our marketplace quality standards.' },
   ],
+  // Exact wording sourced from Module 6 (LFD) and the Post Approver Handbook
+  lfd: [
+    { label: 'No payment / range too wide',     message: 'Please state a valid range/fixed payment, so that your budget is clear to developers.' },
+    { label: 'Payment range too wide',          message: 'Payment range is too wide. Please decrease it before posting again.' },
+    { label: 'Underpayment',                    message: 'Underpayment. Please ensure that you are paying developers fairly.' },
+    { label: 'Percentage-only payment',         message: 'Payment relying solely on percentage of game revenue is prohibited on the RoDevs marketplace.' },
+    { label: '2 scam logs',                     message: '2 scam logs found. You cannot use our marketplace.' },
+    { label: 'Lack of information / vague',     message: 'Lack of information. Please provide a clear description so developers understand what you are looking for.' },
+    { label: 'Poor grammar or spelling',        message: 'Please ensure you use correct grammar/spelling in your description.' },
+    { label: 'Tasks not detailed enough',       message: 'Description too vague, please elaborate on the tasks expected from the developer and repost.' },
+    { label: 'Post structure hard to read',     message: 'Description format makes it hard to read. Please provide a more structured post.' },
+    { label: 'Recruiters / commission finder',  message: 'Recruiters are prohibited on the RoDevs marketplace.' },
+    { label: 'Downloadable files',              message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
+    { label: 'Discord server link',             message: 'Please do not promote your discord server in your post.' },
+    { label: 'Multi-hire post',                 message: 'Multi-hiring is prohibited on the RoDevs marketplace. Please make separate posts for each developer in the designated channels.' },
+    { label: 'Incorrect channel',               message: 'Incorrect channel. Please post this in [X].' },
+    { label: '3D rigger in wrong channel',      message: 'Incorrect channel, please repost in lfd-animation or lfd-modeler.' },
+    { label: 'Deadline under 3 days',           message: 'Commissions with a deadline under 3 days are not allowed. Please increase the deadline and repost.' },
+  ],
+  // Exact wording sourced from Module 6 (Skill Roles) and the Post Approver Handbook
   skill_role: [
-    { label: 'Below quality standards',        message: 'Work does not meet the marketplace standards for this role. We encourage you to reapply once you have improved!' },
-    { label: 'Examples not visible',           message: 'Examples are not visible. Please resubmit in a different format.' },
-    { label: 'Not enough video examples',      message: 'Please provide at least 2 video examples showcasing your work.' },
-    { label: 'Tutorial work submitted',        message: 'We cannot use tutorial work to assess your skill level.' },
-    { label: 'Roblox account not linked',      message: 'Your account is not visibly or directly linked to the game. Please update the game description or provide proof of ownership before resubmitting.' },
-    { label: 'Downloadable file submitted',    message: 'Please remove any downloadable files and use a streaming platform such as YouTube.' },
-    { label: 'No proof of ownership',          message: 'Please include a screenshot showing your creation process (layers, keyframes, topology, timelines, etc.).' },
+    { label: 'Below quality standards',         message: 'Work does not meet the marketplace standards required for this role. We encourage you to reapply once you have improved!' },
+    { label: 'Examples not visible',            message: "Examples aren't visible. Please resubmit using a different format." },
+    { label: 'Not enough video examples',       message: 'Please provide at least 2 video examples showcasing your work.' },
+    { label: 'Tutorial work submitted',         message: 'You cannot use tutorial work to apply for this skill.' },
+    { label: 'Roblox account not linked',       message: 'Your post has been rejected due to your account not being visibly or directly linked to the game. Please update the game description, or make identifiable proof of your ownership prior to re-submitting a game creator/group owner request.' },
+    { label: 'Downloadable file submitted',     message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
   ],
+  // Exact wording sourced from Module 5 (SC) and the Post Approver Handbook
   sell_creations: [
-    { label: 'Selling a game or group',        message: 'Selling games or groups is prohibited on the RoDevs marketplace.' },
-    { label: 'Selling a scripted map',         message: 'Selling scripted maps is prohibited on the RoDevs marketplace.' },
-    { label: 'Not enough examples',            message: 'Please provide at least 2 visual examples of your creation.' },
-    { label: 'No video for scripted/VFX/anim', message: 'Please provide a video showcasing how your system works.' },
-    { label: 'Bad quality',                    message: 'This creation does not meet the marketplace quality standards.' },
-    { label: 'Downloadable files',             message: 'Please remove any downloadable files. Use a streaming platform such as YouTube.' },
-    { label: '1 scam log',                     message: '1 scam log found. You cannot post on this channel.' },
+    { label: 'Selling a game or group',         message: 'Selling games/groups is prohibited on the RoDevs marketplace.' },
+    { label: 'Selling a scripted map',          message: 'Selling scripted maps is prohibited on the RoDevs marketplace.' },
+    { label: 'Not enough examples',             message: 'Please provide at least 2 visual examples.' },
+    { label: 'No video for scripted system',    message: 'Please provide a video showcasing your system.' },
+    { label: 'No description of product',       message: 'Please provide an explanation/description about the product you are selling.' },
+    { label: 'Bad quality',                     message: 'Creation does not meet the marketplace quality standards.' },
+    { label: 'Downloadable files',              message: 'Please ensure your post does not contain any downloadable files. You can use a streaming platform such as YouTube.' },
+    { label: '1 scam log',                      message: '1 scam log found. You cannot post in this channel.' },
+    { label: 'Excess free filler assets',       message: 'Excess use of free filler/placeholder assets. Please replace these with your own assets.' },
   ],
+  // Exact wording sourced from Module 6 (Investors) and the Post Approver Handbook
   investors: [
-    { label: 'Less than 15% revenue share',    message: 'Please ensure at least 15% of revenue is available for investors.' },
-    { label: 'Invalid fund amount',            message: 'Please state a clear, fixed amount or valid range for the investment sought.' },
-    { label: 'Not enough images',              message: 'Please provide at least 5 images showcasing every aspect of your game - maps, UI, models, and systems.' },
-    { label: 'Game under 55% complete',        message: 'Your game must be at least 55% complete based on the images provided.' },
-    { label: 'Game link missing (100%)',        message: 'Please provide a link to your game. A fully complete game must be directly playable for investors to assess.' },
-    { label: 'Poor game quality',              message: 'This game does not meet the marketplace quality standards for investment posts.' },
-    { label: '1 scam log',                     message: '1 scam log found. You cannot post in the investors channel.' },
-    { label: '90-100% share (selling game)',   message: 'Selling games is prohibited on the RoDevs marketplace.' },
-    { label: 'Downloadable files',             message: 'Please remove any downloadable files. Use a streaming platform such as YouTube.' },
-    { label: 'Not a Roblox game',              message: 'You can only seek investment for Roblox games on the RoDevs marketplace.' },
+    { label: 'Less than 15% revenue share',     message: 'Please ensure at least 15% of the revenue is available for investors.' },
+    { label: 'Invalid fund amount or range',    message: 'Please state a valid range/fixed amount to allow investors to understand the fund amount.' },
+    { label: 'Not enough images',               message: 'Investment posts must contain at least 5 images showing the map and every other aspect of the game (UI, systems, maps, models etc.)' },
+    { label: 'Game under 55% complete',         message: 'Game must be at least 55% complete.' },
+    { label: 'Poor game quality',               message: 'Game does not meet the marketplace quality standards.' },
+    { label: '1 scam log',                      message: '1 scam log found. You cannot post in the investors channel.' },
+    { label: 'Share above 90% (selling game)',  message: 'Selling games is prohibited on the RoDevs marketplace.' },
+    { label: 'Downloadable files',              message: 'Please ensure your post does not contain any downloadable files. You can use streaming platforms such as YouTube.' },
+    { label: 'Game link missing (100%)',        message: 'Please provide a link to your game.' },
+    { label: 'Not a Roblox game',               message: 'You can only look for investors for Roblox games on the RoDevs marketplace.' },
   ],
+  // Exact wording sourced from Module 5 (Ads) and the Post Approver Handbook
   advertising: [
-    { label: 'Game not publicly playable',     message: 'Your game must be publicly available to play.' },
-    { label: 'AFK game',                       message: 'AFK games are prohibited on the RoDevs marketplace.' },
-    { label: 'Advertising a service',          message: 'This category is for advertising games, groups, or Roblox platform products only - not services.' },
-    { label: 'Not a Roblox game or group',     message: 'This category is for Roblox platform creations only.' },
-    { label: 'Scam game',                      message: 'Advertising games designed to deceive players is strictly prohibited.' },
-    { label: 'Commission finder',              message: 'Commission finders are prohibited on the RoDevs marketplace.' },
-    { label: 'Poor grammar or spelling',       message: 'Please ensure your description uses correct grammar and spelling.' },
-    { label: 'Off-platform product',           message: 'This category is for Roblox platform creations only.' },
+    { label: 'Game not playable',               message: 'Game must be available to play.' },
+    { label: 'AFK game',                        message: 'AFK games are prohibited on the RoDevs marketplace.' },
+    { label: 'Commission finder',               message: 'Commission finders are prohibited on the RoDevs marketplace.' },
+    { label: 'Poor grammar or spelling',        message: 'Please ensure you use correct grammar/spelling in your description.' },
+    { label: 'Scam or deceptive game',          message: 'Advertising scam games or games meant to deceive users is strictly prohibited in the RoDevs marketplace.' },
+    { label: 'Advertising a service',           message: 'Advertising services in this category are prohibited. This category is meant for advertising a game, group, or a product on the Roblox platform.' },
+    { label: 'Not a Roblox game/group/product', message: "This category is meant to advertise users' creations on the Roblox platform (games, groups, or products on the Roblox platform)." },
   ],
+  // Exact wording sourced from Module 5 (Reviewals) and the Post Approver Handbook
   reviews: [
-    { label: 'Unknown product',                message: 'Please include a clear showcase of the product reviewed.' },
-    { label: 'Unknown payment',                message: 'Please verify and show the payment has taken place.' },
-    { label: 'Insulting or vulgar language',   message: 'Please keep your language respectful and professional.' },
-    { label: 'Fake review',                    message: 'Fake reviews to deceive users are prohibited.' },
-    { label: 'Scam report (wrong channel)',    message: 'Please file a scam report by DMing ModMail instead. This channel is for service reviews only.' },
-    { label: 'Non-RoDevs transaction',         message: 'Please only leave reviews for transactions and services completed within RoDevs.' },
-    { label: 'Payment does not match review',  message: 'Please only provide proof of payment for the specific product you are reviewing.' },
+    { label: 'Product not shown',               message: 'Please provide image proof showcasing the product.' },
+    { label: 'Payment not verified',            message: 'Please provide image evidence verifying the payment.' },
+    { label: 'Insulting or vulgar language',    message: 'Please refrain from using any insults or vulgar language.' },
+    { label: 'Fake review',                     message: 'Please do not attempt to make fake reviews to deceive users.' },
+    { label: 'Scam report (wrong channel)',     message: 'Please make a scam report by DMing modmail to report this user for scamming.' },
+    { label: 'Non-RoDevs transaction',          message: 'Please only make reviews for transactions and services made inside RoDevs.' },
+    { label: 'Payment does not match product',  message: 'Please only post proof of payment for the product you are reviewing.' },
   ],
 };
 
@@ -193,7 +197,6 @@ function buildVariationSeed(): string {
     'says to add them on Discord (gives username)',
   ];
 
-  // Concrete price values to force real variety - model must use the number, not paraphrase it
   const priceSeeds = [
     'exactly 500 Robux flat',
     'exactly 1,200 Robux flat',
@@ -218,11 +221,9 @@ function buildVariationSeed(): string {
     '20% revenue share plus 2,000 Robux upfront',
     'negotiable with a stated minimum of 1,500 Robux',
     'negotiable with a stated minimum of $10 USD',
-    // POF-triggering amounts (clean post)
     'exactly 35,000 Robux flat (triggers POF - post must be clean)',
     'exactly $220 USD flat (triggers POF - post must be clean)',
     'exactly 50,000 Robux flat (triggers POF - post must be clean)',
-    // Violation amounts
     'percentage only - 15% revenue share with no fixed price (VIOLATION)',
     'no payment mentioned anywhere in the post (VIOLATION)',
     'says "negotiable" with no minimum stated (VIOLATION)',
@@ -304,7 +305,6 @@ export async function generateTrainingPost(category: string): Promise<GeneratedP
   const difficulty: 'easy' | 'medium' | 'hard' =
     difficultyRoll < 0.33 ? 'easy' : difficultyRoll < 0.66 ? 'medium' : 'hard';
 
-  // Load up to 5 senior-submitted training examples for this category
   const exampleRows = await sql`
     SELECT post_body, correct_action, reasoning
     FROM post_train_examples
@@ -313,7 +313,6 @@ export async function generateTrainingPost(category: string): Promise<GeneratedP
     LIMIT 5
   `.catch(() => []);
 
-  // Load active rule notes - global ones + category-specific ones
   const noteRows = await sql`
     SELECT note FROM post_train_notes
     WHERE active = true AND (category IS NULL OR category = ${actualCategory})
@@ -387,101 +386,120 @@ MARKETPLACE CATEGORIES:
 - fh: For Hire - developers advertising their services
 - lfd: Looking For Developer - users hiring developers
 - skill_role: Skill Role Applications - developers proving skill to unlock a posting category
-- sell_creations: Sell Creations - users selling ready-made assets
-- investors: Investor Posts - developers seeking financial investment
-- advertising: Roblox Advertising - advertising a Roblox game/group
-- reviews: Reviews - leaving feedback about a developer's service
+- sell_creations: Sell Creations (SC) - users selling ready-made completed assets
+- investors: Investor Posts - developers seeking financial investment for a Roblox game
+- advertising: Roblox Advertising (Ads) - advertising a Roblox game, group, or platform product
+- reviews: Reviewals - users leaving feedback about a completed developer transaction
 
-OFFICIAL RULES (from the RoDevs Post Approver Handbook):
+OFFICIAL RULES (sourced directly from the Post Approver Handbook and RoDevs training modules):
+
+== GENERAL RULES (apply to ALL categories) ==
+- Every post must state a clear payment and payment method (Robux or USD). "Negotiable" or "can be discussed" alone is not acceptable - a fixed minimum or price range is required.
+- Price ranges must NOT exceed 1.5x the minimum. Example: base 5,000 R$ -> max allowed 7,500 R$. Base 1,000 R$ -> max 1,500 R$.
+- Percentages (revenue share) are NOT a valid standalone payment. A fixed price must also be provided.
+- Posts must be professional, clear, and well formatted. Poor grammar or spelling that makes a post hard to read = DENY.
+- Low-quality or poorly described services = DENY.
+- No plagiarism or stolen assets of any kind.
+- Tutorial work is not acceptable as a portfolio example.
+- AI-generated work as examples = suspension in real reviews, but in training treat as DENY since examples cannot be seen.
+- Selling games or groups is not allowed in any category.
+- Free models/free vectors prohibited unless explicitly declared as filler/placeholder.
+- No exploit, virus, malware, or worm related services.
+- Posting on behalf of others (commission finders, recruiters) is prohibited. Denial: "Recruiters are prohibited on the RoDevs marketplace."
+- No Discord server links in posts.
+- No AFK/clicker/scam games.
+- No server creation or management services.
+- Multi-hiring in a single post is prohibited. One service/role per post.
+- No CustomUse.
+- Idea makers, concept creators, and story writers are prohibited from FH (they may post in lfd-others only).
+- Selling plugins is not allowed.
+- LFD posts with a commission deadline under 3 days are not allowed.
+
+== PAYMENT TIER MINIMUMS FOR LFD (critical for underpayment violations) ==
+Tier assignment: Beginner = 1-2 hours, one very simple task | Simple = a few hours, one small polished task | Standard = several hours to a couple days, multiple assets or one proper system | Complex = multiple days to weeks, large systems or many deliverables. When in doubt, tier up. Multiple small tasks combined = bump up a tier.
+
+Scripter (Roblox Lua): Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 18,000 R$/$70 | Complex 70,000 R$/$280
+Programmer (external code/bots/APIs): Beginner 4,000 R$/$15 | Simple 10,000 R$/$40 | Standard 30,000 R$/$120 | Complex 100,000 R$/$400
+GFX Designer: Beginner 1,000 R$/$4 | Simple 2,000 R$/$8 | Standard 5,000 R$/$20 | Complex 12,000 R$/$50
+UI Designer: Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 15,000 R$/$60 | Complex 35,000 R$/$140
+Clothing Designer: Beginner 800 R$/$3 | Simple 1,500 R$/$6 | Standard 4,000 R$/$15 | Complex 10,000 R$/$40
+Builder: Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 18,000 R$/$70 | Complex 45,000 R$/$180
+Modeler: Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 15,000 R$/$60 | Complex 40,000 R$/$160
+Animator: Beginner 1,500 R$/$6 | Simple 3,000 R$/$12 | Standard 8,000 R$/$30 | Complex 25,000 R$/$100
+VFX Artist: Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 10,000 R$/$40 | Complex 25,000 R$/$100
+SFX Artist: Beginner 800 R$/$3 | Simple 1,500 R$/$6 | Standard 4,000 R$/$15 | Complex 10,000 R$/$40
+Music Artist: Beginner 1,000 R$/$4 | Simple 2,000 R$/$8 | Standard 6,000 R$/$25 | Complex 15,000 R$/$60
+Video Editor: Beginner 1,500 R$/$6 | Simple 3,000 R$/$12 | Standard 8,000 R$/$30 | Complex 20,000 R$/$80
 
 == FOR HIRE (FH) ==
-- Must state clear payment and payment method (Robux or USD)
-- "Negotiable" alone is not acceptable - a fixed minimum or range is required
-- Price ranges must not exceed 1.5x the base payment
-- Percentages are not a valid standalone payment - a fixed price must also be provided
-- Posts must be professional, clear, and well formatted
-- Poor grammar or spelling = DENY
-- Low-quality or poorly described services = DENY
-- No plagiarism or stolen assets
-- Tutorial work is not an acceptable portfolio example
-- No selling games or groups
-- No free models/free vectors unless declared placeholder/filler
-- No exploit/virus/malware related services
-- No commission finders (posting on behalf of others)
-- No Discord server links
-- No AFK/clicker/scam game advertising
-- No server creation or management services
-- No multi-hiring in a single post
-- No CustomUse
-- No idea makers/concept creators/story writers in FH
-- No selling plugins
-- FH posts need at least 2 work examples
-- Scripting/animation/video/SFX/sound/VFX require at least 2 VIDEO examples
-- Examples must not require a download - use streaming platforms
-- No low-quality examples or phone photos of a screen
+- At least 2 work examples required for all FH posts.
+- Scripting, animation, VFX, SFX, sound, and video posts require at least 2 VIDEO examples.
+- Examples must not require a download to view - streaming platforms only.
+- Low-quality examples or phone camera photos of a screen = DENY.
+- FH does NOT use tier minimum payment tables (those are for LFD only). Any clearly stated fixed payment or valid range is acceptable for FH.
+- Description must be clear and structured. Vague tasks: "Description too vague, please elaborate on the tasks expected from the developer and repost." Hard to read layout: "Description format makes it hard to read. Please provide a more structured post."
 
 == LOOKING FOR DEVELOPER (LFD) ==
-- Must state a clear payment or range
-- No percentage-only payment
-- Payments must be fair
-- No commission finders
-- No downloadable files
-- No Discord server links
-- No multi-hire (one role per post)
-- No server creation or management services
-- Commission deadline must be at least 3 days
-- 2 scam logs = DENY
+- Must clearly describe the scope of work, offer fair payment (meeting tier minimums), and have a deadline of at least 3 days.
+- Denial for underpayment: "Underpayment. Please ensure that you are paying developers fairly."
+- Denial for range too wide: "Payment range is too wide. Please decrease it before posting again."
+- Denial for no payment: "Please state a valid range/fixed payment, so that your budget is clear to developers."
+- Denial for percentage-only: "Payment relying solely on percentage of game revenue is prohibited on the RoDevs marketplace."
+- Denial for vague description: "Lack of information. Please provide a clear description so developers understand what you are looking for."
+- Denial for tasks not detailed: "Description too vague, please elaborate on the tasks expected from the developer and repost."
+- Denial for poor structure: "Description format makes it hard to read. Please provide a more structured post."
+- 2 scam logs = DENY.
 
 == SKILL ROLE APPLICATIONS ==
-- At least 2 examples required; scripting/VFX/animation/SFX/sound need VIDEO examples
-- Tutorial work = DENY
-- No downloadable files
-- Proof of ownership required (layers, keyframes, topology, timelines, etc.)
-- Roblox account must be linked if applying for game/group creator roles
+- At least 3 examples required (skill roles require more evidence than standard FH).
+- Scripting, VFX, Animation, SFX, and Sound roles require at least 2 VIDEO examples.
+- Tutorial work = DENY: "You cannot use tutorial work to apply for this skill."
+- No downloadable files.
+- Roblox account must be linked for game creator or group owner applications.
+- Standard post format: APPLICATION FOR: [role-tier] | Experience: [X years] | Examples: [links] | Created by: [username] ([userID]) | ID: [postID].
 
-== SELL CREATIONS ==
-- No selling games or groups
-- No selling scripted maps
-- At least 2 examples required
-- Scripted systems/VFX/Animations need video examples
-- No downloadable files
-- 1 scam log = DENY
+== SELL CREATIONS (SC) ==
+- No selling games, groups, or scripted maps.
+- At least 2 examples required. Scripted systems, VFX, and animations require a video example.
+- Denial for no product description: "Please provide an explanation/description about the product you are selling."
+- Denial for excess free filler: "Excess use of free filler/placeholder assets. Please replace these with your own assets."
+- No downloadable files.
+- 1 scam log = DENY.
 
 == INVESTOR POSTS ==
-- Must offer at least 15% revenue share
-- Must state a clear fixed amount or range for investment
-- At least 5 images required
-- Game must be at least 55% complete
-- If 100% complete, must include a game link
-- No off-platform games
-- 1 scam log = DENY
-- 90-100% revenue share = DENY (effectively selling the game)
-- No downloadable files
+- Must offer at least 15% revenue share. Below 15% = DENY.
+- Revenue share above 90% = effectively selling the game = DENY.
+- Must state a clear fixed amount or valid range for investment sought.
+- At least 5 images required covering all aspects of the game.
+- Game must be at least 55% complete.
+- If game is 100% complete, a playable game link must be included.
+- 1 scam log = DENY.
+- Free models are allowed in small amounts in investor posts.
 
 == ROBLOX ADVERTISING ==
-- Game must be publicly playable
-- No AFK games
-- Only Roblox games/groups
-- No scam games
-- Services cannot be advertised here
+- Must be a publicly playable Roblox game, group, or Roblox platform product.
+- No AFK games, scam games, services, or off-platform content.
+- Denial for services: "Advertising services in this category are prohibited. This category is meant for advertising a game, group, or a product on the Roblox platform."
+- Denial for not Roblox: "This category is meant to advertise users' creations on the Roblox platform (games, groups, or products on the Roblox platform)."
+- Denial for not playable: "Game must be available to play."
 
-== REVIEWS ==
-- Must include proof of what was received
-- Must include payment proof
-- No insulting or vulgar language
-- No fake reviews
-- Scam reports must go to ModMail, not here
-- Only reviews for RoDevs transactions
-- Payment must match the review content
+== REVIEWALS ==
+- Must include image proof of the product received. Denial: "Please provide image proof showcasing the product."
+- Must include image evidence of payment. Denial: "Please provide image evidence verifying the payment."
+- No insulting/vulgar language: "Please refrain from using any insults or vulgar language."
+- No fake reviews: "Please do not attempt to make fake reviews to deceive users."
+- Scam reports go to ModMail: "Please make a scam report by DMing modmail to report this user for scamming."
+- Transaction must be from RoDevs: "Please only make reviews for transactions and services made inside RoDevs."
+- Payment proof must match product: "Please only post proof of payment for the product you are reviewing."
 
-== PROOF OF FUNDS ==
-- Required when a post offers 30,000 Robux or more, or $200 USD or more
-- Post must pass all other checks first
-- If threshold met AND post is clean = correct_action is "request_pof"
-- If threshold met AND post has a violation = correct_action is "deny"
+== PROOF OF FUNDS (request_pof action) ==
+- Required when a post offers 30,000 Robux or more, or $200 USD or more.
+- The post must pass ALL other checks first. Never request POF on a post that has any rule violation.
+- If threshold met AND post is completely clean = correct_action is "request_pof".
+- If threshold met AND post has any violation = correct_action is "deny".
 
 == APPROVE ==
-- Post meets all rules, no violations, POF threshold not met
+- Post meets all rules, no violations, POF threshold not met.
 
 correct_action must be one of: "approve", "deny", "request_pof". Do NOT use "suspend".
 ${notesBlock}
@@ -489,96 +507,138 @@ Respond with ONLY valid raw JSON, no markdown fences, no preamble.
 JSON structure:
 {
   "title": "string",
-  "description": "string - the full post body the trainee sees",
+  "description": "string - the full post body formatted like a real marketplace post with correct section headers",
   "payment": "string or null",
-  "category": "string - specific subcategory e.g. fh-scripting, lfd-modeling, skill_role-gfx, sell_creations, investors, advertising, reviews",
+  "category": "string - e.g. fh-scripting, fh-gfx, fh-ui, fh-animation, fh-modeling, fh-sfx, fh-vfx, fh-video, lfd-scripting, lfd-modeling, lfd-animation, lfd-gfx, lfd-ui, lfd-sfx, lfd-music, skill_role-builder-beginner, skill_role-gfx-standard, sell_creations, investors, advertising, reviews",
   "scam_logs": 0,
   "member_since": "DD Month YYYY",
   "has_reviews": false,
   "post_id": "6-digit number as a string",
-  "correct_action": "approve" | "deny" | "request_pof",
-  "violation": "short plain label or null",
-  "explanation": "2-3 sentences citing the exact rule",
-  "difficulty": "easy" | "medium" | "hard"
+  "correct_action": "approve" or "deny" or "request_pof",
+  "violation": "short specific plain label or null",
+  "explanation": "2-3 sentences. Name the exact rule, state the specific threshold or requirement violated, and confirm why the correct_action is right.",
+  "difficulty": "easy" or "medium" or "hard"
 }`;
 }
 
 // USER PROMPT
 function buildUserPrompt(category: string, difficulty: 'easy' | 'medium' | 'hard'): string {
   const diffGuide: Record<string, string> = {
-    easy: 'The violation must be completely unmissable - it should appear in the first 1-2 sentences or be stated plainly. The post author seems unaware of the rules entirely. Examples of good easy violations: no payment at all, a Discord invite link in the first line, zero examples provided, deadline explicitly stated as 1 or 2 days, flat statement that they are posting on behalf of another person.',
-    medium: 'The post should look mostly legitimate on first read. The violation requires actual rule knowledge to catch. Good options: price range that is 1.7x or 1.8x the base (rule allows up to 1.5x), deadline described as "around 48 hours", only one example where two are required, underpayment that is clearly below market rate but not zero. Alternatively write a completely clean post that should be approved - over-denying clean posts is a common trainee failure.',
-    hard: 'This is a genuine edge case. Choose one scenario: (1) A completely clean professional post that is 100% correct and must be approved. (2) A clean post that triggers POF - everything correct but payment is 35,000 Robux or $220 USD or higher. (3) A subtle violation - e.g. price range is 1,000 to 1,600 Robux (1.6x the base, over the 1.5x limit), or deadline is "roughly 72 hours" which is borderline, or proof of ownership is described as a render not a process screenshot. (4) A multi-hire post where two roles are buried in the description. Lean towards approve or request_pof for hard difficulty - trainees must practice not over-denying.',
+    easy: [
+      'The violation must be completely unmissable - visible in the first 1-2 sentences or stated plainly.',
+      'Best easy violations: FH/LFD - no payment at all, a discord.gg link in the first line, zero examples provided, deadline explicitly stated as 1 or 2 days, developer openly states posting on behalf of someone else.',
+      'SC - developer says they are selling a Roblox game or a scripted map. 1 scam log shown.',
+      'Investors - offers 5% revenue share, posts only 2 images, or game is 10% complete.',
+      'Advertising - post is a service advertisement not a game, or game is private/unpublished.',
+      'Reviews - post is a scam report saying the developer scammed them, or no payment proof at all.',
+    ].join(' '),
+    medium: [
+      'The post looks mostly legitimate on first read. The violation requires rule knowledge to catch.',
+      'Good options: FH/LFD - price range that is 1.7x or 1.8x the base (e.g. 1,000 to 1,800 R$ where base is 1,000, max allowed is 1,500), only one example where two are required, LFD deadline of "about 48 hours" or "2 days", LFD underpayment that is below the tier minimum but not zero.',
+      'LFD underpayment example: hiring a scripter for a full inventory system with datastore (Standard tier, minimum 18,000 R$) but offering only 3,000 R$.',
+      'SC: no description of the product at all.',
+      'Alternatively: write a completely clean correct post - APPROVE is the most common missed answer for trainees.',
+    ].join(' '),
+    hard: [
+      'This is a genuine edge case. Choose one:',
+      '(1) Completely clean professional post - must be APPROVED. Make it convincingly realistic.',
+      '(2) Clean post triggering POF - everything correct but payment is 35,000 R$ or $220 USD or more.',
+      '(3) Subtle range violation: price is exactly 1,000-1,600 R$ where base is 1,000 (1.6x, limit is 1.5x = max 1,500 R$).',
+      '(4) LFD underpayment requiring tier tables: e.g. complex builder commission (full open world map, multiple biomes, minimum 45,000 R$) offered at 8,000 R$.',
+      '(5) Skill role with only 2 examples instead of the required 3.',
+      'Lean towards approve or request_pof for hard.',
+    ].join(' '),
   };
 
   const violationPool: Record<string, string[]> = {
     fh: [
-      'no payment stated anywhere', 'percentage-only payment with no fixed price',
-      'price range exceeds 1.5x the base payment', 'Discord server link in the post body',
-      'only one example provided where two are required', 'tutorial used as a portfolio example',
-      'developer is posting on behalf of someone else (commission finder)',
+      'no payment stated anywhere in the post',
+      'price range exceeds 1.5x the base - e.g. 1,000 to 2,000 R$ where max allowed is 1,500',
+      'Discord server invite link in the post body',
+      'only one example provided where at least two are required',
+      'developer explicitly states they are posting on behalf of a client or group',
       'two different services advertised in one post (multi-hire)',
-      'no work examples provided at all', 'downloadable file as the only example',
-      'very poor grammar making the post unclear',
+      'no work examples provided at all',
+      'downloadable file is the only example link',
+      'very poor grammar making the post difficult to understand',
     ],
     lfd: [
-      'deadline explicitly stated as under 3 days', 'no payment mentioned at all',
-      'percentage-only payment', 'payment is clearly underpaying for the work described',
-      'Discord server link included', 'two developer roles in one post',
-      'two scam logs visible', 'posting on behalf of someone else',
+      'deadline explicitly stated as 1 or 2 days',
+      'no payment mentioned anywhere',
+      'percentage-only revenue share with no fixed price',
+      'payment is clearly below the tier minimum for the scope described',
+      'payment range exceeds 1.5x the lower bound',
+      'Discord server link included',
+      'two developer roles in a single post',
+      'two scam logs shown at the bottom of the post',
+      'description so vague the scope cannot be determined',
     ],
     skill_role: [
-      'no proof of ownership provided', 'tutorial used as the only example',
-      'only one example where two are required', 'downloadable file instead of a streaming link',
-      'no Roblox account linked for a game creator role',
+      'only 2 examples where at least 3 are required',
+      'tutorial used as the primary example',
+      'downloadable file instead of a streaming link',
+      'no Roblox account linked for a game creator or group owner application',
+      'examples are not visible - links are broken or private',
     ],
     sell_creations: [
-      'seller is selling a game', 'selling a scripted map', 'only one example provided',
-      '1 scam log visible', 'no examples provided at all', 'downloadable file as example',
+      'seller is explicitly selling a Roblox game',
+      'selling a scripted map',
+      'only one example provided where two are required',
+      '1 scam log shown at the bottom of the post',
+      'no description or explanation of the product whatsoever',
+      'excess free model usage not declared as filler',
     ],
     investors: [
-      'revenue share offered is below 15%', 'revenue share offered is 90-100% (game sale)',
-      'fewer than 5 images provided', 'game appears to be under 55% complete',
-      'game is stated as 100% complete but no link is provided',
-      '1 scam log visible', 'no clear investment amount stated', 'not a Roblox game',
+      'revenue share offered is below 15% (e.g. 5% or 8%)',
+      'revenue share above 90%',
+      'only 2 or 3 images provided where 5 are required',
+      'game clearly appears under 55% complete from the images described',
+      'game stated as 100% complete but no game link provided',
+      '1 scam log shown at the bottom of the post',
+      'no investment amount stated',
     ],
     advertising: [
-      'game is private or unpublished', 'game is an AFK game',
-      'post is advertising a service not a game', 'product is not a Roblox game or group',
+      'game is described as private or not yet published',
+      'post is advertising an AFK game',
+      'post is advertising a development service not a game',
+      'product being advertised is not on the Roblox platform',
     ],
     reviews: [
-      'no proof of what was received', 'no payment proof provided',
-      'post is a scam report not a review', 'review uses insulting language',
-      'transaction was not on RoDevs', 'payment proof does not match what is being reviewed',
+      'no image proof of the product received',
+      'no payment proof provided',
+      'post is a scam report not a review',
+      'review contains insulting or vulgar language',
+      'transaction described was not on RoDevs',
+      'payment proof shown does not match the product being reviewed',
     ],
   };
 
   const baseCategory = category.split('-')[0] as keyof typeof violationPool;
   const violations = violationPool[baseCategory] ?? violationPool['fh'];
-  const pickedViolation = pickRandom(difficulty === 'easy' ? violations.slice(0, 5) : violations);
+  const pickedViolation = pickRandom(difficulty === 'easy' ? violations.slice(0, 4) : violations);
 
   const catGuide: Record<string, string> = {
-    fh:             'A developer advertising their own services. Pick a specific niche from the variation seed.',
-    lfd:            'A project owner looking to hire a developer. Include a project description, role needed, budget, and a deadline.',
-    skill_role:     'A developer applying for a skill role on RoDevs. They need to prove ownership of their work.',
-    sell_creations: 'A developer selling a ready-made asset such as a GUI kit, weapon system, map, or UI template.',
-    investors:      'A developer seeking financial investment for a Roblox game in development. Include revenue share offer, game progress percentage, and description of visual assets.',
-    advertising:    'Someone advertising their public Roblox game or group to attract players.',
-    reviews:        'A user leaving feedback about a completed transaction with a developer on RoDevs. Include proof of payment and proof of what was received.',
+    fh:             'A developer advertising their own services. Use the role type from the variation seed. Include what they offer, their pricing, examples, and contact method.',
+    lfd:            'A project owner hiring a developer. Include project description, scope of work, role needed, budget, and deadline. Use the tier minimums to make payment either correct or violating.',
+    skill_role:     'A developer applying for a verified skill role. Format: APPLICATION FOR: [role-tier] | Experience: [X years] | Examples: [links] | Created by: [username] ([userID]) | ID: [postID].',
+    sell_creations: 'A developer selling a ready-made asset (GUI kit, combat system, UI template, clothing pack, etc.). Include features, what is included, examples, and payment.',
+    investors:      'A developer seeking investment for a Roblox game. Include game name, % complete, revenue share offered, investment amount sought, and description of images/features.',
+    advertising:    'Someone advertising their Roblox game or group. Include game name, gameplay description, features, and a game link.',
+    reviews:        'A user reviewing a completed developer transaction. Show: who is reviewed, what was purchased, proof of product (image links), proof of payment (image link), written comment, and speed/quality/value ratings.',
   };
 
   const variationSeed = buildVariationSeed();
 
   const actionHint =
     difficulty === 'easy'
-      ? `correct_action must be "deny". The violation to build into the post: ${pickedViolation}.`
+      ? `correct_action must be "deny". Violation to build into the post: ${pickedViolation}.`
       : difficulty === 'medium'
-      ? `Choose one: deny (violation: ${pickedViolation}), approve (clean post), or request_pof (clean but payment triggers POF threshold). Pick one and commit.`
-      : `Choose the correct_action that fits your chosen edge case. Options: approve, deny, request_pof.`;
+      ? `Choose one and commit: deny (violation: ${pickedViolation}), approve (clean post - over-denying clean posts is the most common trainee mistake), or request_pof (clean post but payment meets the POF threshold).`
+      : `Choose the correct_action that best fits your edge case: approve, deny, or request_pof.`;
 
   return `Generate a ${difficulty} difficulty training post for category: ${category}.
 
-Category: ${catGuide[baseCategory] ?? catGuide['fh']}
+Category context: ${catGuide[baseCategory] ?? catGuide['fh']}
 
 Difficulty instructions: ${diffGuide[difficulty]}
 
@@ -588,15 +648,16 @@ Variation seed - follow every item exactly, especially the payment amount:
 ${variationSeed}
 
 Requirements:
-- description is the full post body the trainee will read. Match the writing style from the variation seed exactly.
-- Vary the length - easy posts can be short (3-5 lines), hard posts should be longer (8-12 lines).
-- Invent a specific non-generic name for any game, project, or developer username mentioned.
-- scam_logs: 0 almost always. Use 2 for a scam-log deny in fh/lfd. Use 1 for sell_creations or investors scam-log denial.
+- description is the full post body the trainee reads. Format it like a real RoDevs post with correct section headers (TITLE, DESCRIPTION, PAYMENT, WORK EXAMPLES or CREATION SHOWCASE or GAME SHOWCASE, ABOUT THIS USER, POST ID) as appropriate for the category.
+- ABOUT THIS USER must show: "RoDevs Member since [date]", scam log status (e.g. "No scam logs found." or "2 scam logs found."), and reviews status (e.g. "Reviews: None found.").
+- Easy posts: 4-6 lines. Hard posts: 10-15 lines.
+- Invent specific non-generic names for games, projects, and developer usernames.
+- scam_logs: 0 for almost all posts. 2 for FH/LFD scam-log deny. 1 for sell_creations or investors scam-log denial.
 - member_since: realistic date within the last 2 years in format DD Month YYYY.
 - has_reviews: false most of the time.
-- violation: null only if correct_action is "approve" or "request_pof" with no rule broken. Otherwise a short plain label matching the violation.
-- explanation: 2-3 sentences, cite the exact rule.
-- post_id: a realistic 6-digit number as a string.
+- violation: null only if correct_action is "approve" or "request_pof" with no other rule broken. Otherwise a short specific label describing exactly what is wrong (e.g. "price range is 1.8x the base - 1,000 to 1,800 R$, max allowed is 1,500 R$").
+- explanation: 2-3 sentences. State the exact rule, the precise threshold or requirement, and why the correct_action is right.
+- post_id: 6-digit number as a string.
 - difficulty field in JSON must be "${difficulty}".
 
 Output ONLY the raw JSON object.`;
