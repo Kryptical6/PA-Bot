@@ -22,13 +22,14 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   if (assessments.length === 0) { await i.editReply({ embeds: [errorEmbed('No assessments available to you.')] }); return; }
 
-  const select = new StringSelectMenuBuilder().setCustomId('assess_sel').setPlaceholder('Select an assessment')
+  const selectId = `assess_sel:${userId}`;
+  const select = new StringSelectMenuBuilder().setCustomId(selectId).setPlaceholder('Select an assessment')
     .addOptions(assessments.slice(0, 25).map((a: any) => new StringSelectMenuOptionBuilder()
       .setLabel(a.title).setDescription(`Pass: ${a.pass_threshold}%`).setValue(String(a.id))));
 
   const msg = await i.editReply({ content: 'Select an assessment:', components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)] });
 
-  const col = msg.createMessageComponentCollector({ componentType: ComponentType.StringSelect, filter: s => s.user.id === userId && s.customId === 'assess_sel', time: 30_000, max: 1 });
+  const col = msg.createMessageComponentCollector({ componentType: ComponentType.StringSelect, filter: s => s.user.id === userId && s.customId === selectId, time: 30_000, max: 1 });
   col.on('collect', async sel => {
     const assessmentId = parseInt(sel.values[0]);
     const assessment = assessments.find((a: any) => a.id === assessmentId);

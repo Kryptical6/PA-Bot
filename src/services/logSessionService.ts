@@ -14,9 +14,16 @@ export async function startLogSession(client: Client, userId: string, dmChannelI
   }
 
   const expiresAt = new Date(Date.now() + SESSION_HOURS * 3600000);
+  // ON CONFLICT handles any race between the close above and this insert
   await sql`
     INSERT INTO spa_log_sessions (user_id, started_at, expires_at, dm_message_id, dm_channel_id)
     VALUES (${userId}, NOW(), ${expiresAt.toISOString()}, ${dmMessageId}, ${dmChannelId})
+    ON CONFLICT (user_id, status) DO UPDATE
+      SET started_at    = NOW(),
+          expires_at    = ${expiresAt.toISOString()},
+          dm_message_id = ${dmMessageId},
+          dm_channel_id = ${dmChannelId}
+    WHERE spa_log_sessions.status = 'active'
   `;
 }
 

@@ -1,7 +1,7 @@
 import { GuildMember } from 'discord.js';
 import { config } from '../config';
 
-export const isPA  = (m: GuildMember) => m.roles.cache.hasAny(config.roles.PA, config.roles.SPA, config.roles.HPA);
+export const isPA  = (m: GuildMember) => m.roles.cache.hasAny(config.roles.TrialPA, config.roles.PA, config.roles.SPA, config.roles.HPA);
 export const isSPA = (m: GuildMember) => m.roles.cache.hasAny(config.roles.SPA, config.roles.HPA);
 export const isHPA = (m: GuildMember) => m.roles.cache.has(config.roles.HPA);
 
