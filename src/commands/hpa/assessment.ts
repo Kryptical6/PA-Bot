@@ -6,6 +6,8 @@ import {
 import { isHPA } from '../../utils/permissions';
 import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
+import { finalizeAssessment } from '../../services/assessmentService';
+import { safeDM } from '../../services/dmService';
 
 function parseDuration(s: string): number | null {
   const m = s.trim().match(/^(\d+)(h|d)$/i);
@@ -66,7 +68,12 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(o => o.setName('assessment_id').setDescription('Filter by assessment ID (optional)')))
 
   .addSubcommand(sub => sub.setName('sessions')
-    .setDescription('View all in-progress assessment sessions'));
+    .setDescription('View all in-progress assessment sessions'))
+
+  .addSubcommand(sub => sub.setName('force_stop')
+    .setDescription('Force stop a user\'s active assessment session and submit what they have so far')
+    .addUserOption(o => o.setName('user').setDescription('The user whose session to stop').setRequired(true))
+    .addStringOption(o => o.setName('reason').setDescription('Reason for force stopping (sent to the user)').setRequired(true)));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;
@@ -279,7 +286,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     await i.editReply({ embeds: [embed] });
   }
 
-  // ─── SESSIONS ─────────────────────────────────────────────────────────────
+  // SESSIONS
   else if (sub === 'sessions') {
     await i.deferReply({ ephemeral: true });
     const sessions = await sql`SELECT s.*, a.title FROM assessment_sessions s JOIN assessments a ON s.assessment_id = a.id ORDER BY s.started_at DESC`;
@@ -291,5 +298,60 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       ).join('\n'));
     }
     await i.editReply({ embeds: [embed] });
+  }
+
+  // FORCE STOP
+  else if (sub === 'force_stop') {
+    await i.deferReply({ ephemeral: true });
+    const target = i.options.getUser('user', true);
+    const reason = i.options.getString('reason', true).trim();
+
+    const sessions = await sql`
+      SELECT s.*, a.title, a.pass_threshold FROM assessment_sessions s
+      JOIN assessments a ON s.assessment_id = a.id
+      WHERE s.user_id = ${target.id}
+      ORDER BY s.started_at DESC
+    `;
+
+    if (sessions.length === 0) {
+      await i.editReply({ embeds: [errorEmbed(`<@${target.id}> has no active assessment session.`)] });
+      return;
+    }
+
+    const session = sessions[0];
+
+    // Count how many questions they have answered so far
+    const responses = await sql`SELECT COUNT(*) as c FROM assessment_responses WHERE session_id = ${session.id}`;
+    const answered  = parseInt(responses[0].c);
+
+    // Finalize using the existing service - this runs AI marking and sends to HPA review exactly as normal
+    await finalizeAssessment(i.client, target.id, session.id, session.has_scripting ?? false);
+
+    // DM the user explaining what happened
+    await safeDM(i.client, target.id, new EmbedBuilder()
+      .setColor(Colors.Orange)
+      .setTitle('Assessment Force Stopped')
+      .setDescription(
+        `Your assessment session for **${session.title}** has been stopped by HPA.\n\n` +
+        `**Reason:** ${reason}\n\n` +
+        `Your answers so far (${answered} question${answered !== 1 ? 's' : ''}) have been submitted and will be marked. ` +
+        `You will receive your result once HPA has reviewed it.`
+      )
+      .setTimestamp(),
+      'assessment force stopped'
+    );
+
+    await i.editReply({ embeds: [new EmbedBuilder()
+      .setColor(Colors.Green)
+      .setTitle('Session Force Stopped')
+      .addFields(
+        { name: 'User',        value: `<@${target.id}>`,  inline: true },
+        { name: 'Assessment',  value: session.title,       inline: true },
+        { name: 'Answered',    value: `${answered} question${answered !== 1 ? 's' : ''}`, inline: true },
+        { name: 'Reason',      value: reason },
+      )
+      .setDescription('The session has been submitted for AI marking and will appear in the HPA review channel as normal.')
+      .setTimestamp(),
+    ]});
   }
 }

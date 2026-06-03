@@ -39,6 +39,7 @@ import { data as trainAi }           from './commands/spa/train_ai';
 
 // HPA
 import { data as forceStrike }              from './commands/hpa/force_strike';
+import { data as forceStopAssessment }      from './commands/hpa/force_stop_assessment';
 import { data as manageLog }                from './commands/hpa/manage_log';
 import { data as setEscalation }            from './commands/hpa/set_escalation';
 import { data as recalcEscalation }         from './commands/hpa/recalculate_escalation';
@@ -73,7 +74,7 @@ const commands = [
   createEmbed, editEmbed,
   editGameNight, viewEscalations, searchSuggestions,
   // HPA
-  forceStrike, manageLog, setEscalation, recalcEscalation, notifyUser,
+  forceStrike, forceStopAssessment, manageLog, setEscalation, recalcEscalation, notifyUser,
   bulkActions, manageLogTracker, clearStale,
   assessment, severityGuide, manageDenialReasons, importAssessmentQuestions,
   createGameNight, cancelGameNight, deleteSuggestion,

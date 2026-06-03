@@ -63,6 +63,7 @@ import * as deleteSuggestion from '../commands/hpa/delete_suggestion';
 import * as clearStale from '../commands/hpa/clear_stale';
 import { updateScheduleEmbed, buildGameNightEmbed } from '../services/gameNightService';
 import * as forceStrike from '../commands/hpa/force_strike';
+import * as forceStopAssessment from '../commands/hpa/force_stop_assessment';
 import * as manageLog from '../commands/hpa/manage_log';
 import * as setEscalation from '../commands/hpa/set_escalation';
 import * as recalcEscalation from '../commands/hpa/recalculate_escalation';
@@ -98,7 +99,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   view_report_status: viewReportStatus,
   spa_quota: spaQuota, view_spa_audit: viewSpaAudit,
   configure_audit: configureAudit, clear_spa_flag: clearSpaFlag,
-  force_strike: forceStrike, manage_log: manageLog, set_escalation: setEscalation,
+  force_strike: forceStrike, 'force-stop-assessment': forceStopAssessment, manage_log: manageLog, set_escalation: setEscalation,
   recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
   manage_log_tracker: manageLogTracker,
   assessment, severity_guide: severityGuide,
@@ -1229,7 +1230,7 @@ async function handleFeedbackButton(i: any, action: string, rest: string[]): Pro
         { type: 1, components: [{ type: 4, customId: 'res', label: 'Resources (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
         { type: 1, components: [{ type: 4, customId: 'lead', label: 'Leadership (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
         { type: 1, components: [{ type: 4, customId: 'comm', label: 'Communication (1-5)', style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
-        { type: 1, components: [{ type: 4, customId: 'custom', label: `${round.custom_category} (1-5)`, style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
+        { type: 1, components: [{ type: 4, customId: 'custom', label: `${String(round.custom_category).slice(0, 40)} (1-5)`, style: 1, required: true, maxLength: 1, placeholder: '1-5' }] },
       ]
     });
   }
