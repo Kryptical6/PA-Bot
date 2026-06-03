@@ -600,7 +600,8 @@ async function handleButton(i: any): Promise<void> {
 
     const score  = result.hpa_override_score ?? result.score;
     const passed = result.hpa_override_passed ?? result.passed;
-    const { embed, row } = buildReviewEmbed(result.user_id, { title: result.title, pass_threshold: result.pass_threshold }, responses, score, result.total, result.percentage, passed, page, resultId);
+    const pct    = result.total > 0 ? Math.round((score / result.total) * 100) : result.percentage;
+    const { embed, row } = buildReviewEmbed(result.user_id, { title: result.title, pass_threshold: result.pass_threshold }, responses, score, result.total, pct, passed, page, resultId);
     await i.update({ embeds: [embed], components: [row] });
   }
 
@@ -1947,13 +1948,14 @@ async function handleModal(i: any): Promise<void> {
     `;
     const displayScore  = updated.hpa_override_score  ?? updated.score;
     const displayPassed = updated.hpa_override_passed ?? updated.passed;
+    const displayPct    = updated.total > 0 ? Math.round((displayScore / updated.total) * 100) : updated.percentage;
     const { embed, row } = buildReviewEmbed(
       updated.user_id,
       { title: updated.title, pass_threshold: updated.pass_threshold },
       allResponses,
       displayScore,
       updated.total,
-      updated.percentage,
+      displayPct,
       displayPassed,
       page,
       resultId,

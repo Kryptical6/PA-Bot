@@ -219,13 +219,14 @@ export async function sendFinalResult(client: Client, userId: string, resultId: 
 
   const finalScore  = r.hpa_override_score ?? r.score;
   const finalPassed = r.hpa_override_passed ?? r.passed;
+  const finalPct    = r.total > 0 ? Math.round((finalScore / r.total) * 100) : r.percentage;
 
   const embed = new EmbedBuilder()
     .setColor(finalPassed ? Colors.Green : Colors.Red)
     .setTitle(`📊 Assessment Result - ${r.title}`)
     .addFields(
       { name: 'Score',      value: `${finalScore}/${r.total}`, inline: true },
-      { name: 'Percentage', value: `${r.percentage}%`,         inline: true },
+      { name: 'Percentage', value: `${finalPct}%`,              inline: true },
       { name: 'Result',     value: finalPassed ? '✅ Pass' : '❌ Fail', inline: true },
     )
     .setTimestamp();
