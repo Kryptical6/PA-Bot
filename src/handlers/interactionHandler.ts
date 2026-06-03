@@ -1899,11 +1899,12 @@ async function handleModal(i: any): Promise<void> {
   else if (action === 'modal_override') {
     await i.deferReply({ flags: 64 });
     const resultId       = parseInt(rest[0]);
+    const page           = rest[1] ? parseInt(rest[1]) : 0;
     const scoreRaw       = i.fields.getTextInputValue('score').trim();
     const passedRaw      = i.fields.getTextInputValue('passed').trim().toLowerCase();
     const feedback       = i.fields.getTextInputValue('feedback').trim() || null;
     const qOverridesRaw  = i.fields.getTextInputValue('question_overrides').trim();
-    const [result]       = await sql`SELECT * FROM assessment_results WHERE id = ${resultId}`;
+    const [result]       = await sql`SELECT r.*, a.title, a.pass_threshold FROM assessment_results r JOIN assessments a ON r.assessment_id = a.id WHERE r.id = ${resultId}`;
     if (!result) { await i.editReply({ embeds: [errorEmbed('Not found.')] }); return; }
 
     if (qOverridesRaw) {
@@ -1929,17 +1930,55 @@ async function handleModal(i: any): Promise<void> {
         if (ok) newScore++;
       }
       const newPct    = Math.round((newScore / result.total) * 100);
-      const [assessment] = await sql`SELECT pass_threshold FROM assessments WHERE id = ${result.assessment_id}`;
-      const newPassed = newPct >= assessment.pass_threshold;
-      await sql`UPDATE assessment_results SET hpa_override_score = ${newScore}, hpa_override_passed = ${newPassed}, hpa_reviewed = true, hpa_feedback = ${feedback} WHERE id = ${resultId}`;
+      const newPassed = newPct >= result.pass_threshold;
+      await sql`UPDATE assessment_results SET hpa_override_score = ${newScore}, hpa_override_passed = ${newPassed}, hpa_feedback = ${feedback} WHERE id = ${resultId}`;
     } else {
       const overrideScore  = scoreRaw ? parseInt(scoreRaw) : null;
       const overridePassed = passedRaw === 'yes' ? true : passedRaw === 'no' ? false : null;
-      await sql`UPDATE assessment_results SET hpa_override_score = ${overrideScore}, hpa_override_passed = ${overridePassed}, hpa_reviewed = true, hpa_feedback = ${feedback} WHERE id = ${resultId}`;
+      await sql`UPDATE assessment_results SET hpa_override_score = ${overrideScore}, hpa_override_passed = ${overridePassed}, hpa_feedback = ${feedback} WHERE id = ${resultId}`;
     }
 
-    await sendFinalResult(i.client, result.user_id, resultId);
-    await i.editReply({ embeds: [successEmbed('Override Applied', 'Result updated and sent to user.')] });
+    // Refresh the HPA review embed to reflect the override - do NOT send to user yet
+    const [updated] = await sql`SELECT r.*, a.title, a.pass_threshold FROM assessment_results r JOIN assessments a ON r.assessment_id = a.id WHERE r.id = ${resultId}`;
+    const allResponses = await sql`
+      SELECT r.*, q.correct_answer, q.keywords, q.is_scripting, q.post_id
+      FROM assessment_responses r JOIN assessment_questions q ON r.question_id = q.id
+      WHERE r.session_id = ${updated.session_id} ORDER BY r.answered_at ASC
+    `;
+    const displayScore  = updated.hpa_override_score  ?? updated.score;
+    const displayPassed = updated.hpa_override_passed ?? updated.passed;
+    const { embed, row } = buildReviewEmbed(
+      updated.user_id,
+      { title: updated.title, pass_threshold: updated.pass_threshold },
+      allResponses,
+      displayScore,
+      updated.total,
+      updated.percentage,
+      displayPassed,
+      page,
+      resultId,
+    );
+
+    // Edit the original HPA channel message to show the updated scores
+    try {
+      const ch = await i.client.channels.fetch(config.channels.assessmentResults) as TextChannel;
+      const msgs = await ch.messages.fetch({ limit: 50 });
+      const original = msgs.find((msg: any) => msg.embeds[0]?.footer?.text?.includes(`Result ID: ${resultId}`));
+      if (original) await original.edit({ embeds: [embed], components: [row] });
+    } catch { /* silent */ }
+
+    await i.editReply({ embeds: [new EmbedBuilder()
+      .setColor(Colors.Green)
+      .setTitle('Override Saved')
+      .setDescription(
+        `Override applied. The review embed has been updated.\n\n` +
+        `**Score:** ${displayScore}/${updated.total}\n` +
+        `**Result:** ${displayPassed ? 'Pass' : 'Fail'}\n` +
+        `${feedback ? `**Feedback:** ${feedback}\n` : ''}` +
+        `\nClick **Confirm** on the review embed to send the result to the user.`
+      )
+      .setTimestamp()
+    ]});
   }
 
   else if (action === 'modal_escalation_dm') {
