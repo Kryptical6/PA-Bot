@@ -41,7 +41,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   // Find active session
   const [session] = await sql`
-    SELECT s.*, a.title, a.pass_threshold, a.assessment_id
+    SELECT s.*, a.title, a.pass_threshold
     FROM assessment_sessions s
     JOIN assessments a ON s.assessment_id = a.id
     WHERE s.user_id = ${target.id}

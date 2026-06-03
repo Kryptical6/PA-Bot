@@ -625,7 +625,7 @@ async function handleButton(i: any): Promise<void> {
       title: 'Override Result',
       components: [
         { type: 1, components: [{ type: 4, customId: 'score', label: 'Override total score (leave blank to skip)', style: 1, required: false, maxLength: 5 }] },
-        { type: 1, components: [{ type: 4, customId: 'passed', label: 'Override pass/fail? (yes/no, leave blank to skip)', style: 1, required: false, maxLength: 3 }] },
+        { type: 1, components: [{ type: 4, customId: 'passed', label: 'Override pass/fail? (yes/no)', style: 1, required: false, maxLength: 3 }] },
         { type: 1, components: [{ type: 4, customId: 'question_overrides', label: 'Question overrides: Q1=correct,Q3=incorrect', style: 2, required: false, maxLength: 500, placeholder: 'e.g. Q1=correct,Q3=incorrect,Q5=correct' }] },
         { type: 1, components: [{ type: 4, customId: 'feedback', label: 'Feedback for user (optional)', style: 2, required: false, maxLength: 1000 }] },
       ]
