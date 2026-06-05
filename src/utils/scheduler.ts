@@ -39,14 +39,14 @@ async function fireReminders(client: Client): Promise<void> {
       try {
         const user = await client.users.fetch(r.user_id);
         const dm   = await user.createDM();
-        const embed = new EmbedBuilder()
+        await dm.send({ embeds: [new EmbedBuilder()
           .setColor(Colors.Yellow)
           .setTitle('Reminder')
-          .setDescription(r.type === 'custom' ? r.note : `${r.label}${r.note ? `\n\n${r.note}` : ''}`)
+          .setDescription(r.label ?? r.note ?? 'No message')
           .setFooter({ text: `Reminder ID: ${r.id}` })
-          .setTimestamp();
-        await dm.send({ embeds: [embed] });
-      } catch { /* silent - DMs disabled */ }
+          .setTimestamp()
+        ]});
+      } catch { /* DMs disabled */ }
     }
   } catch (e) { console.error('Reminder fire error:', e); }
 }

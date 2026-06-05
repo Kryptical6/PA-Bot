@@ -36,6 +36,7 @@ import { data as spaQuota }         from './commands/spa/spa_quota';
 import { data as setReminder }       from './commands/spa/set_reminder';
 import { data as sendTag }           from './commands/spa/send_tag';
 import { data as trainAi }           from './commands/spa/train_ai';
+import { data as seniorPostTrain }   from './commands/spa/senior_post_train';
 
 // HPA
 import { data as forceStrike }              from './commands/hpa/force_strike';
@@ -69,7 +70,7 @@ const commands = [
   escalate, myEscalations, suggest, remind, botBug, postTrain,
   // SPA
   logMistake, staffProfile, staffOverview, lookupPost, warnUser,
-  createVote, listAssessments, spaQuota, setReminder, sendTag, trainAi,
+  createVote, listAssessments, spaQuota, setReminder, sendTag, trainAi, seniorPostTrain,
   createTag, editTag, deleteTag,
   createEmbed, editEmbed,
   editGameNight, viewEscalations, searchSuggestions,

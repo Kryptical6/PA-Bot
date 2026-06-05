@@ -43,94 +43,94 @@ export interface DenialReason {
 }
 
 export const DENIAL_REASONS: Record<string, DenialReason[]> = {
-  // Exact wording sourced from Module 5 (FH) and the Post Approver Handbook
+  // Sourced verbatim from Module 5 - Marketplace Sections (FH table)
   fh: [
-    { label: 'No payment / range too wide',    message: 'Please state a valid range/fixed payment, so that your fees are clear to developers.' },
-    { label: '2 scam logs',                    message: '2 scam logs found. You cannot use our marketplace.' },
-    { label: 'Poor grammar or spelling',        message: 'Please ensure you use correct grammar/spelling in your description.' },
-    { label: 'Description too vague',           message: 'Description too vague, please elaborate on the tasks expected from the developer and repost.' },
-    { label: 'Post structure hard to read',     message: 'Description format makes it hard to read. Please provide a more structured post.' },
-    { label: 'Recruiters / commission finder',  message: 'Recruiters are prohibited on the RoDevs marketplace.' },
-    { label: 'Downloadable files',              message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
-    { label: 'Discord server link',             message: 'Please do not promote your discord server in your post.' },
-    { label: 'Multi-service post',              message: 'Multi-hiring is prohibited on the RoDevs marketplace. Please make separate posts for each service in the designated channels.' },
-    { label: 'Incorrect channel',               message: 'Incorrect channel. Please post this in [X].' },
-    { label: 'Not enough examples',             message: 'Please provide at least 2 visual examples of your work.' },
-    { label: 'Not enough video examples',       message: 'Please provide at least 2 video examples showcasing your work.' },
-    { label: 'Examples below quality',          message: 'Work examples do not meet our marketplace quality standards.' },
+    { label: 'No payment stated or range makes no sense',      message: 'Please state a valid range/fixed payment, so that your fees are clear to developers.' },
+    { label: '2 scam logs found',                              message: '2 scam logs found. You cannot use our marketplace.' },
+    { label: 'Poor grammar and spelling',                      message: 'Please ensure you use correct grammar/spelling in your description.' },
+    { label: 'Lots of info but tasks not detailed enough',     message: 'Description too vague, please elaborate on the tasks expected from the developer and repost.' },
+    { label: 'Post structure is messy and hard to read',       message: 'Description format makes it hard to read. Please provide a more structured post.' },
+    { label: 'Posting on someone else\'s or a group\'s behalf', message: 'Recruiters are prohibited on the RoDevs marketplace.' },
+    { label: 'Examples are downloadable files',                message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
+    { label: 'Discord server links in the post',               message: 'Please do not promote your discord server in your post.' },
+    { label: 'Promoting multiple services',                    message: 'Multi-hiring is prohibited on the RoDevs marketplace. Please make separate posts for each service in the designated channels.' },
+    { label: 'Incorrect channel',                              message: 'Incorrect channel. Please post this in [X].' },
+    { label: 'Fewer than 2 examples provided',                 message: 'Please provide at least 2 visual examples of your work.' },
+    { label: 'Fewer than 2 video examples (Scripter/VFX/Anim/SFX)', message: 'Please provide at least 2 video examples showcasing your work.' },
+    { label: 'Work examples do not meet quality standards',    message: 'Work examples do not meet our marketplace quality standards.' },
   ],
-  // Exact wording sourced from Module 6 (LFD) and the Post Approver Handbook
+  // Sourced verbatim from Module 6 - Marketplace Sections Part 2 (LFD table)
   lfd: [
-    { label: 'No payment / range too wide',     message: 'Please state a valid range/fixed payment, so that your budget is clear to developers.' },
-    { label: 'Payment range too wide',          message: 'Payment range is too wide. Please decrease it before posting again.' },
-    { label: 'Underpayment',                    message: 'Underpayment. Please ensure that you are paying developers fairly.' },
-    { label: 'Percentage-only payment',         message: 'Payment relying solely on percentage of game revenue is prohibited on the RoDevs marketplace.' },
-    { label: '2 scam logs',                     message: '2 scam logs found. You cannot use our marketplace.' },
-    { label: 'Lack of information / vague',     message: 'Lack of information. Please provide a clear description so developers understand what you are looking for.' },
-    { label: 'Poor grammar or spelling',        message: 'Please ensure you use correct grammar/spelling in your description.' },
-    { label: 'Tasks not detailed enough',       message: 'Description too vague, please elaborate on the tasks expected from the developer and repost.' },
-    { label: 'Post structure hard to read',     message: 'Description format makes it hard to read. Please provide a more structured post.' },
-    { label: 'Recruiters / commission finder',  message: 'Recruiters are prohibited on the RoDevs marketplace.' },
-    { label: 'Downloadable files',              message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
-    { label: 'Discord server link',             message: 'Please do not promote your discord server in your post.' },
-    { label: 'Multi-hire post',                 message: 'Multi-hiring is prohibited on the RoDevs marketplace. Please make separate posts for each developer in the designated channels.' },
-    { label: 'Incorrect channel',               message: 'Incorrect channel. Please post this in [X].' },
-    { label: '3D rigger in wrong channel',      message: 'Incorrect channel, please repost in lfd-animation or lfd-modeler.' },
-    { label: 'Deadline under 3 days',           message: 'Commissions with a deadline under 3 days are not allowed. Please increase the deadline and repost.' },
+    { label: 'No payment stated or range is too wide',         message: 'Please state a valid range/fixed payment, so that your budget is clear to developers.' },
+    { label: 'Payment range is too wide',                      message: 'Payment range is too wide. Please decrease it before posting again.' },
+    { label: 'Underpayment for the scope of work',             message: 'Underpayment. Please ensure that you are paying developers fairly.' },
+    { label: 'Offering only % or uncertain game revenue',      message: 'Payment relying solely on percentage of game revenue is prohibited on the RoDevs marketplace.' },
+    { label: '2 scam logs found',                              message: '2 scam logs found. You cannot use our marketplace.' },
+    { label: 'Unclear description or tasks not well defined',  message: 'Lack of information. Please provide a clear description so developers understand what you are looking for.' },
+    { label: 'Poor grammar and spelling',                      message: 'Please ensure you use correct grammar/spelling in your description.' },
+    { label: 'Info heavy but tasks not detailed enough',       message: 'Description too vague, please elaborate on the tasks expected from the developer and repost.' },
+    { label: 'Post structure is messy and hard to read',       message: 'Description format makes it hard to read. Please provide a more structured post.' },
+    { label: 'Posting on someone else\'s or a group\'s behalf', message: 'Recruiters are prohibited on the RoDevs marketplace.' },
+    { label: 'Examples attached are downloadable files',       message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
+    { label: 'Discord server links in the post',               message: 'Please do not promote your discord server in your post.' },
+    { label: 'Hiring for a commission finder group',           message: 'Commission finders are prohibited on the RoDevs marketplace.' },
+    { label: 'Hiring multiple different skill roles in one post', message: 'Multi-hiring is prohibited on the RoDevs marketplace. Please make separate posts for each developer in the designated channels.' },
+    { label: 'Incorrect channel',                              message: 'Incorrect channel. Please post this in [X].' },
+    { label: 'Looking for 3D riggers in lfd-others',           message: 'Incorrect channel, please repost in lfd-animation or lfd-modeler.' },
   ],
-  // Exact wording sourced from Module 6 (Skill Roles) and the Post Approver Handbook
+  // Sourced verbatim from Module 6 - Marketplace Sections Part 2 (Skill Role table)
   skill_role: [
-    { label: 'Below quality standards',         message: 'Work does not meet the marketplace standards required for this role. We encourage you to reapply once you have improved!' },
-    { label: 'Examples not visible',            message: "Examples aren't visible. Please resubmit using a different format." },
-    { label: 'Not enough video examples',       message: 'Please provide at least 2 video examples showcasing your work.' },
-    { label: 'Tutorial work submitted',         message: 'You cannot use tutorial work to apply for this skill.' },
-    { label: 'Roblox account not linked',       message: 'Your post has been rejected due to your account not being visibly or directly linked to the game. Please update the game description, or make identifiable proof of your ownership prior to re-submitting a game creator/group owner request.' },
-    { label: 'Downloadable file submitted',     message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
+    { label: 'Work does not meet the standard for the role',   message: 'Work does not meet the marketplace standards required for this role. We encourage you to reapply once you have improved!' },
+    { label: 'Examples are not visible or accessible',         message: "Examples aren't visible. Please resubmit using a different format." },
+    { label: 'Fewer than 2 video examples (Scripter/VFX/Anim/SFX)', message: 'Please provide at least 2 video examples showcasing your work.' },
+    { label: 'Tutorial work identified',                       message: 'You cannot use tutorial work to apply for this skill.' },
+    { label: 'Roblox account not linked to the game or group', message: 'Your post has been rejected due to your account not being visibly or directly linked to the game. Please update the game description, or make identifiable proof of your ownership prior to re-submitting a game creator/group owner request.' },
+    { label: 'Application contains downloadable examples',     message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
   ],
-  // Exact wording sourced from Module 5 (SC) and the Post Approver Handbook
+  // Sourced verbatim from Module 5 - Marketplace Sections (SC table)
   sell_creations: [
-    { label: 'Selling a game or group',         message: 'Selling games/groups is prohibited on the RoDevs marketplace.' },
-    { label: 'Selling a scripted map',          message: 'Selling scripted maps is prohibited on the RoDevs marketplace.' },
-    { label: 'Not enough examples',             message: 'Please provide at least 2 visual examples.' },
-    { label: 'No video for scripted system',    message: 'Please provide a video showcasing your system.' },
-    { label: 'No description of product',       message: 'Please provide an explanation/description about the product you are selling.' },
-    { label: 'Bad quality',                     message: 'Creation does not meet the marketplace quality standards.' },
-    { label: 'Downloadable files',              message: 'Please ensure your post does not contain any downloadable files. You can use a streaming platform such as YouTube.' },
-    { label: '1 scam log',                      message: '1 scam log found. You cannot post in this channel.' },
-    { label: 'Excess free filler assets',       message: 'Excess use of free filler/placeholder assets. Please replace these with your own assets.' },
+    { label: 'Selling a game or group',                        message: 'Selling games/groups is prohibited on the RoDevs marketplace.' },
+    { label: 'Selling a scripted map',                         message: 'Selling scripted maps is prohibited on the RoDevs marketplace.' },
+    { label: 'Fewer than 2 examples',                          message: 'Please provide at least 2 visual examples.' },
+    { label: 'Scripted system with no video',                  message: 'Please provide a video showcasing your system.' },
+    { label: 'Not enough information about the product',       message: 'Please provide an explanation/description about the product you are selling.' },
+    { label: 'Bad quality',                                    message: 'Creation does not meet the marketplace quality standards.' },
+    { label: 'Examples are downloadable files',                message: 'Please ensure your post does not contain any downloadable files. You can use a streaming platform such as YouTube.' },
+    { label: '1 scam log found',                               message: '1 scam log found. You cannot post in this channel.' },
+    { label: 'Too many free filler or placeholder assets',     message: 'Excess use of free filler/placeholder assets. Please replace these with your own assets.' },
   ],
-  // Exact wording sourced from Module 6 (Investors) and the Post Approver Handbook
+  // Sourced verbatim from Module 6 - Marketplace Sections Part 2 (Investors table)
   investors: [
-    { label: 'Less than 15% revenue share',     message: 'Please ensure at least 15% of the revenue is available for investors.' },
-    { label: 'Invalid fund amount or range',    message: 'Please state a valid range/fixed amount to allow investors to understand the fund amount.' },
-    { label: 'Not enough images',               message: 'Investment posts must contain at least 5 images showing the map and every other aspect of the game (UI, systems, maps, models etc.)' },
-    { label: 'Game under 55% complete',         message: 'Game must be at least 55% complete.' },
-    { label: 'Poor game quality',               message: 'Game does not meet the marketplace quality standards.' },
-    { label: '1 scam log',                      message: '1 scam log found. You cannot post in the investors channel.' },
-    { label: 'Share above 90% (selling game)',  message: 'Selling games is prohibited on the RoDevs marketplace.' },
-    { label: 'Downloadable files',              message: 'Please ensure your post does not contain any downloadable files. You can use streaming platforms such as YouTube.' },
-    { label: 'Game link missing (100%)',        message: 'Please provide a link to your game.' },
-    { label: 'Not a Roblox game',               message: 'You can only look for investors for Roblox games on the RoDevs marketplace.' },
+    { label: 'Offering less than 15% revenue share',           message: 'Please ensure at least 15% of the revenue is available for investors.' },
+    { label: 'Fund amount or range does not make sense',       message: 'Please state a valid range/fixed amount to allow investors to understand the fund amount.' },
+    { label: 'Fewer than 5 examples or not enough shown',      message: 'Investment posts must contain at least 5 images showing the map and every other aspect of the game (UI, systems, maps, models etc.)' },
+    { label: 'Game is less than 55% complete',                 message: 'Game must be at least 55% complete.' },
+    { label: 'Game does not meet quality standards',           message: 'Game does not meet the marketplace quality standards.' },
+    { label: '1 scam log found',                               message: '1 scam log found. You cannot post in the investors channel.' },
+    { label: 'Share offered is above 90%',                     message: 'Selling games is prohibited on the RoDevs marketplace.' },
+    { label: 'Examples are downloadable files',                message: 'Please ensure your post does not contain any downloadable files. You can use streaming platforms such as YouTube.' },
+    { label: 'Game is 100% complete but no game link provided', message: 'Please provide a link to your game.' },
+    { label: 'Not a Roblox game',                              message: 'You can only look for investors for Roblox games on the RoDevs marketplace.' },
   ],
-  // Exact wording sourced from Module 5 (Ads) and the Post Approver Handbook
+  // Sourced verbatim from Module 5 - Marketplace Sections (Ads table)
   advertising: [
-    { label: 'Game not playable',               message: 'Game must be available to play.' },
-    { label: 'AFK game',                        message: 'AFK games are prohibited on the RoDevs marketplace.' },
-    { label: 'Commission finder',               message: 'Commission finders are prohibited on the RoDevs marketplace.' },
-    { label: 'Poor grammar or spelling',        message: 'Please ensure you use correct grammar/spelling in your description.' },
-    { label: 'Scam or deceptive game',          message: 'Advertising scam games or games meant to deceive users is strictly prohibited in the RoDevs marketplace.' },
-    { label: 'Advertising a service',           message: 'Advertising services in this category are prohibited. This category is meant for advertising a game, group, or a product on the Roblox platform.' },
-    { label: 'Not a Roblox game/group/product', message: "This category is meant to advertise users' creations on the Roblox platform (games, groups, or products on the Roblox platform)." },
+    { label: 'Game is not playable',                           message: 'Game must be available to play.' },
+    { label: 'AFK game',                                       message: 'AFK games are prohibited on the RoDevs marketplace.' },
+    { label: 'Commission finder',                              message: 'Commission finders are prohibited on the RoDevs marketplace.' },
+    { label: 'Poor grammar and spelling',                      message: 'Please ensure you use correct grammar/spelling in your description.' },
+    { label: 'Scam game or deceptive game',                    message: 'Advertising scam games or games meant to deceive users is strictly prohibited in the RoDevs marketplace.' },
+    { label: 'Advertising services instead of a game/group/product', message: 'Advertising services in this category are prohibited. This category is meant for advertising a game, group, or a product on the Roblox platform.' },
+    { label: 'Not advertising a Roblox game, group, or product', message: "This category is meant to advertise users' creations on the Roblox platform (games, groups, or products on the Roblox platform)." },
   ],
-  // Exact wording sourced from Module 5 (Reviewals) and the Post Approver Handbook
+  // Sourced verbatim from Module 5 - Marketplace Sections (Reviewals table)
   reviews: [
-    { label: 'Product not shown',               message: 'Please provide image proof showcasing the product.' },
-    { label: 'Payment not verified',            message: 'Please provide image evidence verifying the payment.' },
-    { label: 'Insulting or vulgar language',    message: 'Please refrain from using any insults or vulgar language.' },
-    { label: 'Fake review',                     message: 'Please do not attempt to make fake reviews to deceive users.' },
-    { label: 'Scam report (wrong channel)',     message: 'Please make a scam report by DMing modmail to report this user for scamming.' },
-    { label: 'Non-RoDevs transaction',          message: 'Please only make reviews for transactions and services made inside RoDevs.' },
-    { label: 'Payment does not match product',  message: 'Please only post proof of payment for the product you are reviewing.' },
+    { label: 'Product is unknown or not shown',                message: 'Please provide image proof showcasing the product.' },
+    { label: 'Payment is unknown or not verified',             message: 'Please provide image evidence verifying the payment.' },
+    { label: 'Insults or vulgar language used',                message: 'Please refrain from using any insults or vulgar language.' },
+    { label: 'Fake review',                                    message: 'Please do not attempt to make fake reviews to deceive users.' },
+    { label: 'Review is about being scammed',                  message: 'Please make a scam report by DMing modmail to report this user for scamming.' },
+    { label: 'Reviewing a service not on RoDevs or outside RoDevs', message: 'Please only make reviews for transactions and services made inside RoDevs.' },
+    { label: 'Payment does not match the product being reviewed', message: 'Please only post proof of payment for the product you are reviewing.' },
   ],
 };
 
@@ -148,21 +148,21 @@ export async function getDenialReasons(category: string): Promise<DenialReason[]
   return DENIAL_REASONS[base] ?? DENIAL_REASONS['fh'];
 }
 
-// Seed the DB with hardcoded defaults if the table is empty for a given category
+// Seed the DB with the current hardcoded defaults, overwriting any existing rows.
+// Called on startup to keep DB in sync with the source of truth in this file.
 export async function seedDenialReasons(): Promise<void> {
   try {
-    const existing = await sql`SELECT COUNT(*) as c FROM denial_reasons`;
-    if (parseInt(existing[0].c) > 0) return; // already seeded
     for (const [category, reasons] of Object.entries(DENIAL_REASONS)) {
+      // Delete all existing rows for this category and re-insert from source
+      await sql`DELETE FROM denial_reasons WHERE category = ${category}`;
       for (let i = 0; i < reasons.length; i++) {
         await sql`
           INSERT INTO denial_reasons (category, label, message, position)
           VALUES (${category}, ${reasons[i].label}, ${reasons[i].message}, ${i})
-          ON CONFLICT (category, label) DO NOTHING
         `;
       }
     }
-    console.log('[DenialReasons] Seeded default denial reasons into DB.');
+    console.log('[DenialReasons] Seeded denial reasons from source.');
   } catch (e) {
     console.error('[DenialReasons] Seed failed:', e);
   }

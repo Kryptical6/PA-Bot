@@ -76,6 +76,8 @@ import * as manageDenialReasons from '../commands/hpa/manage_denial_reasons';
 import { handleDenialReasonsInteraction } from '../commands/hpa/manage_denial_reasons';
 import * as postTrain from '../commands/shared/post_train';
 import * as trainAi from '../commands/spa/train_ai';
+import * as seniorPostTrain from '../commands/spa/senior_post_train';
+import { routeSeniorInteraction, handleSeniorCategorySelect, hasSeniorSession } from '../commands/spa/senior_post_train';
 import { handlePostTrainInteraction } from './postTrainHandler';
 
 const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Promise<void> }> = {
@@ -89,6 +91,7 @@ const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Pr
   remind, 'bot-bug': botBug,
   'post-train': postTrain,
   'train-ai': trainAi,
+  'senior-post-train': seniorPostTrain,
   import_assessment_questions: importAssessmentQ,
   escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
   edit_game_night: editGameNight,
@@ -151,6 +154,11 @@ async function handleButton(i: any): Promise<void> {
   // Post training buttons
   if (action === 'pt_action' || action === 'pt_deny_open' || action === 'pt_continue' || action === 'pt_end') {
     await handlePostTrainInteraction(i); return;
+  }
+
+  // Senior post training buttons
+  if (action.startsWith('spt_')) {
+    await routeSeniorInteraction(i); return;
   }
 
   // Denial reasons management buttons
@@ -1323,9 +1331,21 @@ async function handleSuggestionButton(i: any, action: string, rest: string[]): P
 async function handleSelect(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
-  // Post training category select
-  if (i.customId === 'pt_category_select' || i.customId.startsWith('pt_deny_sel:')) {
+  // Post training category select - route to senior flow if senior session is active
+  if (i.customId === 'pt_category_select') {
+    const isSenior = await hasSeniorSession(i.user.id);
+    if (isSenior) { await handleSeniorCategorySelect(i as any); return; }
     await handlePostTrainInteraction(i); return;
+  }
+
+  // Post training deny select
+  if (i.customId.startsWith('pt_deny_sel:')) {
+    await handlePostTrainInteraction(i); return;
+  }
+
+  // Senior post training selects
+  if (i.customId.startsWith('spt_')) {
+    await routeSeniorInteraction(i); return;
   }
 
   // Denial reasons management selects
@@ -1542,6 +1562,11 @@ async function handleModal(i: any): Promise<void> {
   // Denial reasons management modals
   if (action === 'dr_add_modal' || action === 'dr_edit_modal') {
     await handleDenialReasonsInteraction(i); return;
+  }
+
+  // Senior post training modals
+  if (action === 'spt_thought_modal' || action === 'spt_deny_thought_modal') {
+    await routeSeniorInteraction(i); return;
   }
 
   if (action === 'session_count_modal') {
