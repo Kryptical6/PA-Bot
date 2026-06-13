@@ -17,7 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export const data = new SlashCommandBuilder()
-  .setName('my_escalations')
+  .setName('my-escalations')
   .setDescription('View your submitted escalations');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

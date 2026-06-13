@@ -3,7 +3,7 @@ import { isSPA } from '../../utils/permissions';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('dept_suggestions')
+  .setName('search-suggestions')
   .setDescription('Search suggestions by keyword (SPA+)')
   .addStringOption(o => o.setName('keyword').setDescription('Keyword to search').setRequired(true))
   .addStringOption(o => o.setName('status').setDescription('Filter by status')

@@ -6,7 +6,7 @@ import { config } from '../../config';
 import { updateScheduleEmbed, buildGameNightEmbed } from '../../services/gameNightService';
 
 export const data = new SlashCommandBuilder()
-  .setName('edit_game_night')
+  .setName('edit-game-night')
   .setDescription('Edit a scheduled game night (SPA+)');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

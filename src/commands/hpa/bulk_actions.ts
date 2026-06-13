@@ -6,7 +6,7 @@ import { checkEscalation } from '../../services/escalationService';
 import { checkPendingLogReminders } from '../../services/reminderService';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('bulk_actions').setDescription('Run bulk operations (HPA only)')
+export const data = new SlashCommandBuilder().setName('bulk-actions').setDescription('Run bulk operations (HPA only)')
   .addStringOption(o => o.setName('action').setDescription('Action').setRequired(true)
     .addChoices(
       { name: 'Clear Expired Logs', value: 'clear' },

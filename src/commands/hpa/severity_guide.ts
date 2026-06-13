@@ -18,7 +18,7 @@ async function ensureGuide(): Promise<void> {
 }
 
 export const data = new SlashCommandBuilder()
-  .setName('severity_guide')
+  .setName('severity-guide')
   .setDescription('View or update the severity guide shown when logging mistakes (HPA only)')
   .addSubcommand(sub => sub.setName('view')
     .setDescription('View the current severity guide'))

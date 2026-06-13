@@ -4,7 +4,7 @@ import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('create_tag')
+  .setName('create-tag')
   .setDescription('Create a knowledge base tag (SPA+)')
   .addStringOption(o => o.setName('category').setDescription('Tag category').setRequired(true)
     .addChoices(

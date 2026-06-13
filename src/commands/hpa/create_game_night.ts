@@ -6,7 +6,7 @@ import { config } from '../../config';
 import { updateScheduleEmbed, buildGameNightEmbed } from '../../services/gameNightService';
 
 export const data = new SlashCommandBuilder()
-  .setName('create_game_night')
+  .setName('create-game-night')
   .setDescription('Schedule a game night (HPA only)')
   .addStringOption(o => o.setName('title').setDescription('Event title').setRequired(true))
   .addStringOption(o => o.setName('date').setDescription('Date and time (YYYY-MM-DD HH:MM)').setRequired(true))

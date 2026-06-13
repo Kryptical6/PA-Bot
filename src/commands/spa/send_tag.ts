@@ -11,7 +11,7 @@ import { config } from '../../config';
 import { dmUser } from '../../services/dmService';
 
 export const data = new SlashCommandBuilder()
-  .setName('send_tag')
+  .setName('send-tag')
   .setDescription('Send a knowledge base tag (SPA+)')
   .addStringOption(o => o.setName('delivery').setDescription('How to deliver the tag').setRequired(true)
     .addChoices(
@@ -217,7 +217,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
         `Initial send: **${sent}** member(s) DM'd${failed > 0 ? `, ${failed} failed` : ''}`,
         `Mode: **${replaceExisting ? 'Replace' : 'Add alongside'}**`,
         ``,
-        `New members who gain this role will be DM'd when you manually trigger a check via /send_tag manage.`,
+        `New members who gain this role will be DM'd when you manually trigger a check via /send-tag manage.`,
       ].join('\n'))],
       components: [],
     });

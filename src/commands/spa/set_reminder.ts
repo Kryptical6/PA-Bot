@@ -56,7 +56,7 @@ export function getCurrentLocalHour(timezone: string): number {
 }
 
 export const data = new SlashCommandBuilder()
-  .setName('set_reminder')
+  .setName('set-reminder')
   .setDescription('Set when you receive your daily log reminder')
   .addIntegerOption(o => o
     .setName('hour')

@@ -2,7 +2,7 @@ import { Client, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuil
 import { sql } from '../database/client';
 import { config } from '../config';
 import { dmUser } from './dmService';
-import { infoEmbed } from '../utils/embeds';
+import { embedDescription, embedField, embedFooter, embedTitle, infoEmbed } from '../utils/embeds';
 import { aiMarkAssessment } from './aiMarkingService';
 
 function parseOrder(raw: any): number[] {
@@ -45,8 +45,8 @@ export async function startAssessmentSession(client: Client, userId: string, ass
 
   const welcomeEmbed = new EmbedBuilder()
     .setColor(Colors.Blue)
-    .setTitle(a.title)
-    .setDescription(descParts.join('\n'))
+    .setTitle(embedTitle(a.title))
+    .setDescription(embedDescription(descParts.join('\n')))
     .setTimestamp();
 
   const startBtn  = new ButtonBuilder().setCustomId(`assess_start:${sessionId}`).setLabel('Start').setStyle(ButtonStyle.Success);
@@ -69,11 +69,11 @@ export async function sendQuestion(client: Client, userId: string, sessionId: nu
   const embed = new EmbedBuilder()
     .setColor(Colors.Yellow)
     .setTitle(`Question ${index + 1} of ${order.length}`)
-    .addFields({ name: 'Post ID', value: `\`${q.post_id}\`` })
-    .setFooter({ text: `Session ID: ${sessionId}` })
+    .addFields(embedField('Post ID', `\`${q.post_id}\``))
+    .setFooter({ text: embedFooter(`Session ID: ${sessionId}`) })
     .setTimestamp();
 
-  if (q.context) embed.addFields({ name: 'Context', value: q.context });
+  if (q.context) embed.addFields(embedField('Context', q.context));
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId(`assess:${sessionId}:${order[index]}:approve`).setLabel('✅ Approve').setStyle(ButtonStyle.Success),
@@ -161,15 +161,15 @@ export function buildReviewEmbed(
 
   const embed = new EmbedBuilder()
     .setColor(passed ? Colors.Green : Colors.Red)
-    .setTitle(`📊 Assessment Review - ${assessment.title}`)
-    .setDescription(
+    .setTitle(embedTitle(`📊 Assessment Review - ${assessment.title}`))
+    .setDescription(embedDescription(
       `**User:** <@${userId}>\n` +
       `**Score:** ${score}/${total} (${pct}%)\n` +
       `**Result:** ${passed ? '✅ Pass' : '❌ Fail'}\n` +
       `**Pass Threshold:** ${assessment.pass_threshold}%\n` +
       `**Result ID:** ${resultId}`
-    )
-    .setFooter({ text: `Page ${page + 1}/${totalPages} - ${responses.length} questions total` })
+    ))
+    .setFooter({ text: embedFooter(`Page ${page + 1}/${totalPages} - ${responses.length} questions total`) })
     .setTimestamp();
 
   slice.forEach((r: any, idx: number) => {
@@ -178,10 +178,10 @@ export function buildReviewEmbed(
     const lines = [`**Answer:** ${r.action}  |  **Correct:** ${r.correct_answer}`];
     if (r.reason) lines.push(`**Reason:** ${r.reason}`);
     if (r.correct_reason) lines.push(`**Expected:** ${r.correct_reason}`);
-    embed.addFields({
-      name: `Q${qNum}: \`${r.post_id}\`${r.is_scripting ? ' [Scripting]' : ''} ${ok ? '✅' : '❌'}`,
-      value: lines.join('\n'),
-    });
+    embed.addFields(embedField(
+      `Q${qNum}: \`${r.post_id}\`${r.is_scripting ? ' [Scripting]' : ''} ${ok ? '✅' : '❌'}`,
+      lines.join('\n'),
+    ));
   });
 
   const btns: ButtonBuilder[] = [];
@@ -223,15 +223,15 @@ export async function sendFinalResult(client: Client, userId: string, resultId: 
 
   const embed = new EmbedBuilder()
     .setColor(finalPassed ? Colors.Green : Colors.Red)
-    .setTitle(`📊 Assessment Result - ${r.title}`)
+    .setTitle(embedTitle(`📊 Assessment Result - ${r.title}`))
     .addFields(
-      { name: 'Score',      value: `${finalScore}/${r.total}`, inline: true },
-      { name: 'Percentage', value: `${finalPct}%`,              inline: true },
-      { name: 'Result',     value: finalPassed ? '✅ Pass' : '❌ Fail', inline: true },
+      embedField('Score', `${finalScore}/${r.total}`, true),
+      embedField('Percentage', `${finalPct}%`, true),
+      embedField('Result', finalPassed ? '✅ Pass' : '❌ Fail', true),
     )
     .setTimestamp();
 
-  if (r.hpa_feedback) embed.addFields({ name: 'Feedback', value: r.hpa_feedback });
+  if (r.hpa_feedback) embed.addFields(embedField('Feedback', r.hpa_feedback));
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId(`view_details:${resultId}`).setLabel('📊 View Detailed Results').setStyle(ButtonStyle.Primary)
@@ -252,20 +252,17 @@ export async function sendRetakeRequest(client: Client, userId: string, assessme
     .setColor(Colors.Orange)
     .setTitle('🔄 Retake Request')
     .addFields(
-      { name: 'User',       value: `<@${userId}>`,  inline: true },
-      { name: 'Assessment', value: assessmentTitle, inline: true },
+      embedField('User', `<@${userId}>`, true),
+      embedField('Assessment', assessmentTitle, true),
     )
-    .setFooter({ text: `Request ID: ${reqId}` })
+    .setFooter({ text: embedFooter(`Request ID: ${reqId}`) })
     .setTimestamp();
 
   if (prevRows.length > 0) {
     const prev = prevRows[0];
     const prevScore  = prev.hpa_override_score ?? prev.score;
     const prevPassed = prev.hpa_override_passed ?? prev.passed;
-    embed.addFields({
-      name: 'Previous Result',
-      value: `${prevScore}/${prev.total} (${prev.percentage}%) - ${prevPassed ? '✅ Pass' : '❌ Fail'}`,
-    });
+    embed.addFields(embedField('Previous Result', `${prevScore}/${prev.total} (${prev.percentage}%) - ${prevPassed ? '✅ Pass' : '❌ Fail'}`));
   }
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(

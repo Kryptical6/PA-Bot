@@ -16,6 +16,7 @@ import {
   buildCategorySelect,
   createSession,
   getActiveSession,
+  getShownScenarioIds,
   endSession,
   savePostToSession,
   recordAnswer,
@@ -50,18 +51,13 @@ async function handleCategorySelect(i: StringSelectMenuInteraction): Promise<voi
     embeds: [new EmbedBuilder()
       .setColor(Colors.Blue)
       .setTitle('Generating your first post...')
-      .setDescription(
-        `Category: **${label}**\n\nPlease wait a moment.\n\n` +
-        `Note: the Suspend action is not available in training because post examples are not generated ` +
-        `and therefore cannot be checked for free models, stolen assets, or AI-generated content. ` +
-        `In training, suspected AI content is treated as a standard denial.`
-      )
+      .setDescription(`Category: **${label}**\n\nPlease wait a moment.`)
       .setTimestamp()],
     components: [],
   });
 
   const session = await createSession(i.user.id, category);
-  const post    = await generateTrainingPost(category);
+  const post    = await generateTrainingPost(category, getShownScenarioIds(session));
 
   if (!post) {
     await i.editReply({
@@ -80,7 +76,7 @@ async function handleCategorySelect(i: StringSelectMenuInteraction): Promise<voi
 
   await i.editReply({
     embeds: [buildPostEmbed(post, 0, 0)],
-    components: buildPostActionRows(session.id, post.category) as any,
+    components: await buildPostActionRows(session.id, post.category) as any,
   });
 }
 
@@ -111,21 +107,16 @@ async function handleAction(i: ButtonInteraction, rest: string[]): Promise<void>
     return;
   }
 
-  const correct          = action === post.correct_action;
+  const answerAction = action === 'approve_message' ? 'approve' : action;
+  const correct      = answerAction === post.correct_action;
   const { score, total } = await recordAnswer(sessionId, correct);
 
-  // Disable all action buttons
-  const disabledRows = buildPostActionRows(sessionId, post.category).map(row => {
-    (row.components as any[]).forEach((btn: any) => {
-      if (typeof btn.setDisabled === 'function') btn.setDisabled(true);
-    });
-    return row;
-  });
+  const disabledRows = await buildPostActionRows(sessionId, post.category, true);
 
   await i.update({ components: disabledRows as any });
 
   await i.followUp({
-    embeds: [buildFeedbackEmbed(post, action, null, correct, score, total)],
+    embeds: [buildFeedbackEmbed(post, answerAction, null, correct, score, total)],
     components: [buildContinueRow(sessionId)],
   });
 }
@@ -194,32 +185,22 @@ async function handleDenySelect(i: StringSelectMenuInteraction): Promise<void> {
     return;
   }
 
-  // Scoring:
-  // Correct if: (a) correct_action is "deny" AND chosen label loosely matches the violation
-  // We match by checking if the violation string (from AI) is contained in the label or vice versa,
-  // or if correct_action is simply "deny" - we give credit for picking any denial reason
-  // since the trainee already correctly identified it as a deny.
-  // If correct_action is "approve" or "request_pof", deny is wrong regardless of reason.
-  const correct = post.correct_action === 'deny';
+  const acceptedLabels = post.correct_denial_labels?.length
+    ? post.correct_denial_labels
+    : post.violation
+    ? [post.violation]
+    : [];
+  const correct = post.correct_action === 'deny'
+    && acceptedLabels.some(label => label.toLowerCase() === chosenLabel.toLowerCase());
   const { score, total } = await recordAnswer(sessionId, correct);
+  const disabledRows = await buildPostActionRows(sessionId, post.category, true);
 
-  // Dismiss the ephemeral reason picker
-  await i.update({ components: [] });
+  await i.update({ components: disabledRows as any });
 
-  // Edit the original DM message to show disabled action buttons
-  try {
-    const disabledRows = buildPostActionRows(sessionId, post.category).map(row => {
-      (row.components as any[]).forEach((btn: any) => {
-        if (typeof btn.setDisabled === 'function') btn.setDisabled(true);
-      });
-      return row;
-    });
-    // The interaction that opened the select was ephemeral, so we follow up to the DM
-    await i.followUp({
-      embeds: [buildFeedbackEmbed(post, 'deny', chosenLabel, correct, score, total)],
-      components: [buildContinueRow(sessionId)],
-    });
-  } catch { /* silent */ }
+  await i.followUp({
+    embeds: [buildFeedbackEmbed(post, 'deny', chosenLabel, correct, score, total)],
+    components: [buildContinueRow(sessionId)],
+  });
 }
 
 // CONTINUE BUTTON - generate next post
@@ -246,7 +227,7 @@ async function handleContinue(i: ButtonInteraction, rest: string[]): Promise<voi
     components: [],
   });
 
-  const post = await generateTrainingPost(session.category);
+  const post = await generateTrainingPost(session.category, getShownScenarioIds(session));
 
   if (!post) {
     await i.editReply({
@@ -265,7 +246,7 @@ async function handleContinue(i: ButtonInteraction, rest: string[]): Promise<voi
 
   await i.editReply({
     embeds: [buildPostEmbed(post, session.score, session.total)],
-    components: buildPostActionRows(sessionId, post.category) as any,
+    components: await buildPostActionRows(sessionId, post.category) as any,
   });
 }
 

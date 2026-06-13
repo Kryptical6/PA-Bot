@@ -4,7 +4,7 @@ import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 import { syncStrikeRole } from '../../services/strikeRoleService';
 
-export const data = new SlashCommandBuilder().setName('manage_log').setDescription('Edit, remove, or transfer a log (HPA only)')
+export const data = new SlashCommandBuilder().setName('manage-log').setDescription('Edit, remove, or transfer a log (HPA only)')
   .addUserOption(o => o.setName('user').setDescription('Staff member').setRequired(true))
   .addStringOption(o => o.setName('action').setDescription('Action').setRequired(true)
     .addChoices({ name: 'Edit', value: 'edit' }, { name: 'Remove', value: 'remove' }, { name: 'Transfer', value: 'transfer' }));

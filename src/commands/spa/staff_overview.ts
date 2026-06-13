@@ -3,7 +3,7 @@ import { isSPA, isHPA } from '../../utils/permissions';
 import { sql } from '../../database/client';
 import { config } from '../../config';
 
-export const data = new SlashCommandBuilder().setName('staff_overview').setDescription('View all staff logs');
+export const data = new SlashCommandBuilder().setName('staff-overview').setDescription('View all staff logs');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;

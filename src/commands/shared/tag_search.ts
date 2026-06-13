@@ -3,7 +3,7 @@ import { sql } from '../../database/client';
 import { errorEmbed } from '../../utils/embeds';
 import { isPA } from '../../utils/permissions';
 
-export const data = new SlashCommandBuilder().setName('tag_search').setDescription('Search tags by keyword')
+export const data = new SlashCommandBuilder().setName('tag-search').setDescription('Search tags by keyword')
   .addStringOption(o => o.setName('keyword').setDescription('Keyword to search').setRequired(true));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

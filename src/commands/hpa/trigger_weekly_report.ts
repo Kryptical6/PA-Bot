@@ -7,7 +7,7 @@ import { dmUser } from '../../services/dmService';
 import { config } from '../../config';
 
 export const data = new SlashCommandBuilder()
-  .setName('trigger_weekly_report')
+  .setName('trigger-weekly-report')
   .setDescription('Manually trigger the weekly report DMs now (HPA only)');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
@@ -17,7 +17,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
 
   const existing = await getActiveCycle();
   if (existing) {
-    await i.editReply({ embeds: [errorEmbed(`A cycle is already active (Week ${existing.week_number}). Use \`/view_report_status\` to check progress.`)] });
+    await i.editReply({ embeds: [errorEmbed(`A cycle is already active (Week ${existing.week_number}). Use \`/view-report-status\` to check progress.`)] });
     return;
   }
 

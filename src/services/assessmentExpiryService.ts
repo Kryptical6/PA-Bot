@@ -18,7 +18,7 @@ export async function cancelExpiredAssessmentSessions(client: Client): Promise<v
 
   for (const s of expired) {
     await dmUser(client, s.user_id, {
-      embeds: [warningEmbed('Assessment Expired', `Your assessment **${s.title}** has expired. Use \`/pa_assessment\` to request a retake.`)]
+      embeds: [warningEmbed('Assessment Expired', `Your assessment **${s.title}** has expired. Use \`/pa-assessment\` to request a retake.`)]
     });
     await sql`DELETE FROM assessment_sessions WHERE id = ${s.id}`;
   }

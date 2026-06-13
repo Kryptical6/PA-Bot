@@ -3,7 +3,7 @@ import { isSPA } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('lookup_post').setDescription('Search for a post ID')
+export const data = new SlashCommandBuilder().setName('lookup-post').setDescription('Search for a post ID')
   .addStringOption(o => o.setName('post_id').setDescription('Post ID (partial match)').setRequired(true));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

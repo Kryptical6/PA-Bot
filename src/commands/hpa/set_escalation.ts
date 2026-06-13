@@ -3,7 +3,7 @@ import { isHPA } from '../../utils/permissions';
 import { successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('set_escalation').setDescription('Set escalation rate (HPA only)')
+export const data = new SlashCommandBuilder().setName('set-escalation').setDescription('Set escalation rate (HPA only)')
   .addIntegerOption(o => o.setName('rate').setDescription('Mistakes to trigger a strike').setRequired(true).setMinValue(1).setMaxValue(20));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

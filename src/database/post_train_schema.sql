@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS post_train_sessions (
   total           INT         NOT NULL DEFAULT 0,
   started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ended_at        TIMESTAMPTZ,
-  last_post_data  JSONB
+  last_post_data  JSONB,
+  shown_post_keys JSONB       NOT NULL DEFAULT '[]'::jsonb
 );
 
 -- Only one active session per user at a time

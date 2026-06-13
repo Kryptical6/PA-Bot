@@ -1,6 +1,7 @@
 import { Client, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder, TextChannel } from 'discord.js';
 import { sql } from '../database/client';
 import { config } from '../config';
+import { embedDescription, embedField, embedFooter, embedTitle } from '../utils/embeds';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
 
@@ -180,16 +181,16 @@ async function sendReviewToHPA(
 
   const embed = new EmbedBuilder()
     .setColor(passed ? Colors.Green : Colors.Red)
-    .setTitle(`Assessment Review${aiMarked ? ' (AI Marked)' : ' (Exact Match)'} - ${assessment.title}`)
-    .setDescription([
+    .setTitle(embedTitle(`Assessment Review${aiMarked ? ' (AI Marked)' : ' (Exact Match)'} - ${assessment.title}`))
+    .setDescription(embedDescription([
       `**User:** <@${userId}>`,
       `**Score:** ${score}/${total} (${pct}%)`,
       `**Result:** ${passed ? 'Pass' : 'Fail'}`,
       `**Pass Threshold:** ${assessment.pass_threshold}%`,
       `**Result ID:** ${resultId}`,
       assessment.hpa_feedback ? `\n**AI Summary:** ${assessment.hpa_feedback}` : '',
-    ].filter(Boolean).join('\n'))
-    .setFooter({ text: `Page 1/${totalPages} - ${total} questions total - ${aiMarked ? 'AI pre-marked' : 'exact match fallback'}` })
+    ].filter(Boolean).join('\n')))
+    .setFooter({ text: embedFooter(`Page 1/${totalPages} - ${total} questions total - ${aiMarked ? 'AI pre-marked' : 'exact match fallback'}`) })
     .setTimestamp();
 
   // Show first 3 questions
@@ -199,10 +200,10 @@ async function sendReviewToHPA(
     if (r.reason)        lines.push(`Reason: ${r.reason}`);
     if (r.correct_reason) lines.push(`Expected: ${r.correct_reason}`);
     if (r.ai_note)       lines.push(`AI Note: ${r.ai_note}`);
-    embed.addFields({
-      name: `Q${idx + 1}: \`${r.post_id}\`${r.is_scripting ? ' [Scripting]' : ''} ${ok ? '✅' : '❌'}`,
-      value: lines.join('\n'),
-    });
+    embed.addFields(embedField(
+      `Q${idx + 1}: \`${r.post_id}\`${r.is_scripting ? ' [Scripting]' : ''} ${ok ? '✅' : '❌'}`,
+      lines.join('\n'),
+    ));
   });
 
   const btns: ButtonBuilder[] = [

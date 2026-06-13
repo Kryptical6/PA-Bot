@@ -3,7 +3,7 @@ import { isHPA } from '../../utils/permissions';
 import { notifyEmbed, successEmbed } from '../../utils/embeds';
 import { safeDM } from '../../services/dmService';
 
-export const data = new SlashCommandBuilder().setName('notify_user').setDescription('Send a structured DM (HPA only)')
+export const data = new SlashCommandBuilder().setName('notify-user').setDescription('Send a structured DM (HPA only)')
   .addStringOption(o => o.setName('type').setDescription('Type').setRequired(true)
     .addChoices({ name: 'Warning', value: 'warning' }, { name: 'Info', value: 'info' }, { name: 'Reminder', value: 'reminder' }))
   .addStringOption(o => o.setName('users').setDescription('User IDs or mentions (space separated)').setRequired(true))

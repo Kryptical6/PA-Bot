@@ -3,7 +3,7 @@ import { isSPA } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
 
 export const data = new SlashCommandBuilder()
-  .setName('warn_user')
+  .setName('warn-user')
   .setDescription('Send a formal warning DM to a staff member (SPA+)')
   .addUserOption(o => o.setName('user').setDescription('Staff member to warn').setRequired(true));
 

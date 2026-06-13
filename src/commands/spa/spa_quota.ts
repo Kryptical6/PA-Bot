@@ -4,7 +4,7 @@ import { errorEmbed } from '../../utils/embeds';
 import { buildQuotaEmbed } from '../../services/spaAuditService';
 
 export const data = new SlashCommandBuilder()
-  .setName('spa_quota')
+  .setName('spa-quota')
   .setDescription('View SPA log quota and stats')
   .addUserOption(o => o.setName('senior').setDescription('View a specific senior\'s stats (HPA only)'));
 

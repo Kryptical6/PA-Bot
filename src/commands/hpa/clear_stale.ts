@@ -4,7 +4,7 @@ import { successEmbed, infoEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('clear_stale')
+  .setName('clear-stale')
   .setDescription('Clear stale pending logs or appeals the bot is DMing about (HPA only)')
   .addStringOption(o => o.setName('type').setDescription('What to clear').setRequired(true)
     .addChoices(

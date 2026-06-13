@@ -6,7 +6,7 @@ import { startAssessmentSession, sendQuestion, sendRetakeRequest } from '../../s
 import { config } from '../../config';
 import { dmUser } from '../../services/dmService';
 
-export const data = new SlashCommandBuilder().setName('pa_assessment').setDescription('Start a PA assessment');
+export const data = new SlashCommandBuilder().setName('pa-assessment').setDescription('Start a PA assessment');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;

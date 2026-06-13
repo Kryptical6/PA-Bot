@@ -3,7 +3,7 @@ import { isSPA } from '../../utils/permissions';
 import { errorEmbed, successEmbed, infoEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('delete_tag').setDescription('Delete a tag');
+export const data = new SlashCommandBuilder().setName('delete-tag').setDescription('Delete a tag');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;

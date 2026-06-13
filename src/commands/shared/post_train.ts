@@ -58,7 +58,6 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
           `You will be shown fake marketplace posts one at a time. For each post, choose the correct action:\n\n` +
           `**Approve** - post meets all rules\n` +
           `**Deny** - post violates one or more rules\n` +
-          `**Suspend** - suspected stolen or AI-generated content with evidence in the post\n` +
           `**Request Proof of Funds** - post is clean but meets the POF threshold (30,000 R$ / $200 USD or more)\n\n` +
           `Select a category below to begin.`
         )

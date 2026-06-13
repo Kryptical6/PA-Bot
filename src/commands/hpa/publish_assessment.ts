@@ -3,7 +3,7 @@ import { isHPA } from '../../utils/permissions';
 import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('publish_assessment').setDescription('Publish or unpublish an assessment (HPA only)')
+export const data = new SlashCommandBuilder().setName('publish-assessment').setDescription('Publish or unpublish an assessment (HPA only)')
   .addIntegerOption(o => o.setName('assessment_id').setDescription('Assessment ID').setRequired(true))
   .addBooleanOption(o => o.setName('published').setDescription('True to publish, false to unpublish').setRequired(true));
 

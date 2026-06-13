@@ -1,4 +1,4 @@
--- Severity guide table (editable at runtime via /severity_guide update)
+-- Severity guide table (editable at runtime via /severity-guide update)
 CREATE TABLE IF NOT EXISTS severity_guide (
   id INTEGER PRIMARY KEY DEFAULT 1,
   minor TEXT NOT NULL DEFAULT 'Minor - Small formatting issues, missing non-critical information, minor rule violations with low impact.',

@@ -5,7 +5,7 @@ import { buildAuditReport } from '../../services/spaAuditService';
 import { config } from '../../config';
 
 export const data = new SlashCommandBuilder()
-  .setName('view_spa_audit')
+  .setName('view-spa-audit')
   .setDescription('View a full SPA audit report (HPA only)')
   .addUserOption(o => o.setName('senior').setDescription('Senior to audit (or use dropdown)'));
 

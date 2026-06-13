@@ -9,7 +9,7 @@ function parseDuration(s: string): number | null {
   return parseInt(m[1]) * (m[2].toLowerCase() === 'h' ? 3600000 : 86400000);
 }
 
-export const data = new SlashCommandBuilder().setName('create_vote').setDescription('Create a staff vote')
+export const data = new SlashCommandBuilder().setName('create-vote').setDescription('Create a staff vote')
   .addStringOption(o => o.setName('title').setDescription('Vote title').setRequired(true))
   .addRoleOption(o => o.setName('role').setDescription('Role being voted on').setRequired(true))
   .addStringOption(o => o.setName('duration').setDescription('Duration e.g. 24h or 7d').setRequired(true))

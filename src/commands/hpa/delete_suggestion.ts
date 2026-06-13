@@ -5,7 +5,7 @@ import { sql } from '../../database/client';
 import { config } from '../../config';
 
 export const data = new SlashCommandBuilder()
-  .setName('delete_suggestion')
+  .setName('delete-suggestion')
   .setDescription('Remove an approved game suggestion (HPA only)');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

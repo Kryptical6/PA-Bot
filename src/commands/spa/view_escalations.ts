@@ -17,7 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export const data = new SlashCommandBuilder()
-  .setName('view_escalations')
+  .setName('view-escalations')
   .setDescription('View escalations (SPA+)')
   .addStringOption(o => o.setName('status').setDescription('Filter by status')
     .addChoices(

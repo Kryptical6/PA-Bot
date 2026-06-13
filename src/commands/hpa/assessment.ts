@@ -49,16 +49,16 @@ export const data = new SlashCommandBuilder()
     .setDescription('View all questions for an assessment')
     .addIntegerOption(o => o.setName('assessment_id').setDescription('Assessment ID').setRequired(true)))
 
-  .addSubcommand(sub => sub.setName('add_question')
+  .addSubcommand(sub => sub.setName('add-question')
     .setDescription('Add a question to an assessment')
     .addIntegerOption(o => o.setName('assessment_id').setDescription('Assessment ID').setRequired(true))
     .addBooleanOption(o => o.setName('scripting').setDescription('Is this a scripting-only question?').setRequired(true)))
 
-  .addSubcommand(sub => sub.setName('edit_question')
+  .addSubcommand(sub => sub.setName('edit-question')
     .setDescription('Edit an existing question')
     .addIntegerOption(o => o.setName('question_id').setDescription('Question ID').setRequired(true)))
 
-  .addSubcommand(sub => sub.setName('delete_question')
+  .addSubcommand(sub => sub.setName('delete-question')
     .setDescription('Delete a question')
     .addIntegerOption(o => o.setName('question_id').setDescription('Question ID').setRequired(true)))
 
@@ -70,7 +70,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub.setName('sessions')
     .setDescription('View all in-progress assessment sessions'))
 
-  .addSubcommand(sub => sub.setName('force_stop')
+  .addSubcommand(sub => sub.setName('force-stop')
     .setDescription('Force stop a user\'s active assessment session and submit what they have so far')
     .addUserOption(o => o.setName('user').setDescription('The user whose session to stop').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Reason for force stopping (sent to the user)').setRequired(true)));
@@ -103,8 +103,8 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
       `Duration: ${dur} | Pass: ${threshold}%${restricted ? ' | Restricted' : ''}`,
       ``,
       `Next steps:`,
-      `• Add questions: \`/assessment add_question assessment_id:${result.id}\``,
-      `• Bulk import: \`/import_assessment_questions assessment_id:${result.id}\``,
+      `• Add questions: \`/assessment add-question assessment_id:${result.id}\``,
+      `• Bulk import: \`/import-assessment-questions assessment_id:${result.id}\``,
       `• Publish when ready: \`/assessment publish assessment_id:${result.id} published:true\``,
     ].join('\n'))] });
   }
@@ -215,7 +215,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   }
 
   // ─── ADD QUESTION ─────────────────────────────────────────────────────────
-  else if (sub === 'add_question') {
+  else if (sub === 'add-question') {
     const assessmentId = i.options.getInteger('assessment_id', true);
     const isScripting  = i.options.getBoolean('scripting', true);
     const [a] = await sql`SELECT id FROM assessments WHERE id = ${assessmentId}`;
@@ -234,7 +234,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   }
 
   // ─── EDIT QUESTION ────────────────────────────────────────────────────────
-  else if (sub === 'edit_question') {
+  else if (sub === 'edit-question') {
     const qId = i.options.getInteger('question_id', true);
     const [q] = await sql`SELECT * FROM assessment_questions WHERE id = ${qId}`;
     if (!q) { await i.reply({ embeds: [errorEmbed(`Question #${qId} not found.`)], ephemeral: true }); return; }
@@ -252,7 +252,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   }
 
   // ─── DELETE QUESTION ──────────────────────────────────────────────────────
-  else if (sub === 'delete_question') {
+  else if (sub === 'delete-question') {
     await i.deferReply({ ephemeral: true });
     const qId = i.options.getInteger('question_id', true);
     const [q] = await sql`SELECT * FROM assessment_questions WHERE id = ${qId}`;
@@ -301,7 +301,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   }
 
   // FORCE STOP
-  else if (sub === 'force_stop') {
+  else if (sub === 'force-stop') {
     await i.deferReply({ ephemeral: true });
     const target = i.options.getUser('user', true);
     const reason = i.options.getString('reason', true).trim();

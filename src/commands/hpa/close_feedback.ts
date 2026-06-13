@@ -5,7 +5,7 @@ import { sql } from '../../database/client';
 import { closeFeedbackRound } from '../../services/feedbackService';
 
 export const data = new SlashCommandBuilder()
-  .setName('close_feedback')
+  .setName('close-feedback')
   .setDescription('Close an active feedback round early (HPA only)');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

@@ -7,7 +7,7 @@ import { updateLogTracker } from '../../services/logTrackerService';
 import { buildStrikeRolePrompt, getActiveStrikeCount } from '../../services/strikeRoleService';
 import { config } from '../../config';
 
-export const data = new SlashCommandBuilder().setName('force_strike').setDescription('Issue a strike directly (HPA only)')
+export const data = new SlashCommandBuilder().setName('force-strike').setDescription('Issue a strike directly (HPA only)')
   .addUserOption(o => o.setName('user').setDescription('Staff member').setRequired(true));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

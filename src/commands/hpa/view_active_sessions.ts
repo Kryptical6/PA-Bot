@@ -2,7 +2,7 @@ import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, EmbedBui
 import { isHPA } from '../../utils/permissions';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('view_active_sessions').setDescription('View in-progress assessment sessions (HPA only)');
+export const data = new SlashCommandBuilder().setName('view-active-sessions').setDescription('View in-progress assessment sessions (HPA only)');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;

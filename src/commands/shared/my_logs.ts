@@ -4,7 +4,7 @@ import { isPA } from '../../utils/permissions';
 
 const PAGE = 4;
 
-export const data = new SlashCommandBuilder().setName('my_logs').setDescription('View your active mistakes and strikes');
+export const data = new SlashCommandBuilder().setName('my-logs').setDescription('View your active mistakes and strikes');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;

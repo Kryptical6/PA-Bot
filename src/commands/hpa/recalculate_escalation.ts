@@ -4,7 +4,7 @@ import { successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 import { checkEscalation } from '../../services/escalationService';
 
-export const data = new SlashCommandBuilder().setName('recalculate_escalation').setDescription('Re-evaluate all staff escalation (HPA only)');
+export const data = new SlashCommandBuilder().setName('recalculate-escalation').setDescription('Re-evaluate all staff escalation (HPA only)');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;

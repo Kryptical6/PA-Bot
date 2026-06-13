@@ -7,7 +7,7 @@ import { config } from '../../config';
 const PAGE = 5;
 
 export const data = new SlashCommandBuilder()
-  .setName('staff_profile')
+  .setName('staff-profile')
   .setDescription('View a staff member profile')
   .addUserOption(o => o.setName('user').setDescription('Staff member').setRequired(true));
 

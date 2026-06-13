@@ -2,7 +2,7 @@ import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, EmbedBui
 import { isSPA } from '../../utils/permissions';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('list_assessments').setDescription('View available assessments');
+export const data = new SlashCommandBuilder().setName('list-assessments').setDescription('View available assessments');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const m = i.member as GuildMember;

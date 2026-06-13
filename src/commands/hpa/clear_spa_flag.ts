@@ -4,7 +4,7 @@ import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('clear_spa_flag')
+  .setName('clear-spa-flag')
   .setDescription('Manually clear a stat flag on a senior (HPA only)')
   .addUserOption(o => o.setName('senior').setDescription('Senior to clear flags for').setRequired(true));
 

@@ -4,7 +4,7 @@ import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('edit_tag')
+  .setName('edit-tag')
   .setDescription('Edit an existing tag (SPA+)');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

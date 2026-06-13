@@ -4,7 +4,7 @@ import { successEmbed, errorEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('configure_audit')
+  .setName('configure-audit')
   .setDescription('Configure SPA audit settings (HPA only)')
   .addSubcommand(sub => sub.setName('global')
     .setDescription('Set global thresholds for all seniors')

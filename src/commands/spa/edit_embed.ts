@@ -3,7 +3,7 @@ import { isSPA } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
 
 export const data = new SlashCommandBuilder()
-  .setName('edit_embed')
+  .setName('edit-embed')
   .setDescription('Edit an existing embed posted by the bot')
   .addStringOption(o => o.setName('message_id').setDescription('The message ID of the embed to edit').setRequired(true))
   .addChannelOption(o => o.setName('channel').setDescription('Channel the embed is in').setRequired(true));

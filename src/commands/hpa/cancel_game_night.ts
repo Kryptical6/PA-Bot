@@ -7,7 +7,7 @@ import { updateScheduleEmbed } from '../../services/gameNightService';
 import { dmUser } from '../../services/dmService';
 
 export const data = new SlashCommandBuilder()
-  .setName('cancel_game_night')
+  .setName('cancel-game-night')
   .setDescription('Cancel a scheduled game night (HPA only)')
   .addStringOption(o => o.setName('reason').setDescription('Reason for cancellation').setRequired(true));
 

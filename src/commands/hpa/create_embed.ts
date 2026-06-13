@@ -3,7 +3,7 @@ import { isHPA } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
 
 export const data = new SlashCommandBuilder()
-  .setName('create_embed')
+  .setName('create-embed')
   .setDescription('Create a custom embed in a channel (HPA only)')
   .addChannelOption(o => o.setName('channel').setDescription('Channel to post the embed in').setRequired(true));
 

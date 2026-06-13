@@ -3,7 +3,7 @@ import { isHPA } from '../../utils/permissions';
 import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('restrict_assessment').setDescription('Restrict assessment access (HPA only)')
+export const data = new SlashCommandBuilder().setName('restrict-assessment').setDescription('Restrict assessment access (HPA only)')
   .addIntegerOption(o => o.setName('assessment_id').setDescription('Assessment ID').setRequired(true))
   .addUserOption(o => o.setName('user').setDescription('User to allow/remove').setRequired(true))
   .addBooleanOption(o => o.setName('allow').setDescription('True to allow, false to remove').setRequired(true));

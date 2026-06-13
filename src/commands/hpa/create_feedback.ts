@@ -5,7 +5,7 @@ import { sql } from '../../database/client';
 import { buildFeedbackEmbed, buildFeedbackRow } from '../../services/feedbackService';
 
 export const data = new SlashCommandBuilder()
-  .setName('create_feedback')
+  .setName('create-feedback')
   .setDescription('Create a new PA feedback round (HPA only)')
   .addStringOption(o => o.setName('title').setDescription('Feedback round title').setRequired(true))
   .addStringOption(o => o.setName('duration').setDescription('Duration e.g. 7d or 14d').setRequired(true))

@@ -9,7 +9,7 @@ function parseDuration(s: string): number | null {
   return parseInt(m[1]) * (m[2].toLowerCase() === 'h' ? 3600000 : 86400000);
 }
 
-export const data = new SlashCommandBuilder().setName('create_assessment').setDescription('Create a new assessment (HPA only)')
+export const data = new SlashCommandBuilder().setName('create-assessment').setDescription('Create a new assessment (HPA only)')
   .addStringOption(o => o.setName('title').setDescription('Title').setRequired(true))
   .addStringOption(o => o.setName('duration').setDescription('Duration e.g. 2h or 1d').setRequired(true))
   .addStringOption(o => o.setName('description').setDescription('Briefing shown before questions'))
@@ -31,5 +31,5 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   if (!ms) { await i.editReply({ embeds: [errorEmbed('Invalid duration. Use `2h` or `1d`.')] }); return; }
 
   const [result] = await sql`INSERT INTO assessments (title, description, deadline_ms, pass_threshold, restricted, created_by) VALUES (${title}, ${desc}, ${ms}, ${threshold}, ${restricted}, ${i.user.id}) RETURNING id`;
-  await i.editReply({ embeds: [successEmbed('Created', `Assessment **${title}** created (ID: ${result.id}).\n\nAdd questions with \`/create_assessment_question\`, then publish with \`/publish_assessment\`.`)] });
+  await i.editReply({ embeds: [successEmbed('Created', `Assessment **${title}** created (ID: ${result.id}).\n\nAdd questions with \`/assessment add-question\`, then publish with \`/assessment publish\`.`)] });
 }

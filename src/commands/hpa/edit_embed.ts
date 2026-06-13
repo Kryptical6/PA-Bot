@@ -3,7 +3,7 @@ import { isHPA } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
 
 export const data = new SlashCommandBuilder()
-  .setName('edit_embed')
+  .setName('edit-embed')
   .setDescription('Edit an existing embed (HPA only)')
   .addChannelOption(o => o.setName('channel').setDescription('Channel the embed is in').setRequired(true))
   .addStringOption(o => o.setName('message_id').setDescription('Message ID of the embed to edit').setRequired(true));

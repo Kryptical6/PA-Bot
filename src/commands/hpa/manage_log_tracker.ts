@@ -4,7 +4,7 @@ import { successEmbed } from '../../utils/embeds';
 import { updateLogTracker, resetTrackerMessageId } from '../../services/logTrackerService';
 import { config } from '../../config';
 
-export const data = new SlashCommandBuilder().setName('manage_log_tracker').setDescription('Manage the staff log tracker embed (HPA only)')
+export const data = new SlashCommandBuilder().setName('manage-log-tracker').setDescription('Manage the staff log tracker embed (HPA only)')
   .addStringOption(o => o.setName('action').setDescription('Action').setRequired(true)
     .addChoices({ name: 'Send - Post fresh tracker embed', value: 'send' }, { name: 'Refresh - Update existing embed', value: 'refresh' }));
 

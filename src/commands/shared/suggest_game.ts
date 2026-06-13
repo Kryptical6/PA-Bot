@@ -5,7 +5,7 @@ import { sql } from '../../database/client';
 import { config } from '../../config';
 
 export const data = new SlashCommandBuilder()
-  .setName('game_suggest')
+  .setName('game-suggest')
   .setDescription('Suggest a game for game night')
   .addStringOption(o => o.setName('game').setDescription('Game name').setRequired(true))
   .addStringOption(o => o.setName('description').setDescription('Why should we play this? (optional)'));

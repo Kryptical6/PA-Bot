@@ -6,7 +6,7 @@ import { sql } from '../../database/client';
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const data = new SlashCommandBuilder()
-  .setName('setup_weekly_report')
+  .setName('setup-weekly-report')
   .setDescription('Configure the weekly SPA report cycle (HPA only)')
   .addIntegerOption(o => o.setName('day').setDescription('Day of week to send DMs').setRequired(true)
     .addChoices(

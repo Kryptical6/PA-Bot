@@ -1,16 +1,45 @@
 import { EmbedBuilder, Colors } from 'discord.js';
 
+const FALLBACK_TEXT = 'Not provided';
+
+export function truncateText(value: unknown, maxLength: number, fallback = FALLBACK_TEXT): string {
+  const text = value === null || value === undefined ? '' : String(value).trim();
+  const safe = text.length > 0 ? text : fallback;
+  if (safe.length <= maxLength) return safe;
+  return `${safe.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+export function embedTitle(value: unknown): string {
+  return truncateText(value, 256, 'Untitled');
+}
+
+export function embedDescription(value: unknown): string {
+  return truncateText(value, 4096);
+}
+
+export function embedFooter(value: unknown): string {
+  return truncateText(value, 2048);
+}
+
+export function embedField(name: unknown, value: unknown, inline = false): { name: string; value: string; inline?: boolean } {
+  return {
+    name: truncateText(name, 256, 'Field'),
+    value: truncateText(value, 1024),
+    inline,
+  };
+}
+
 export const successEmbed = (title: string, desc: string) =>
-  new EmbedBuilder().setColor(Colors.Green).setTitle(title).setDescription(desc).setTimestamp();
+  new EmbedBuilder().setColor(Colors.Green).setTitle(embedTitle(title)).setDescription(embedDescription(desc)).setTimestamp();
 
 export const errorEmbed = (desc: string) =>
-  new EmbedBuilder().setColor(Colors.Red).setTitle('Error').setDescription(desc).setTimestamp();
+  new EmbedBuilder().setColor(Colors.Red).setTitle('Error').setDescription(embedDescription(desc)).setTimestamp();
 
 export const infoEmbed = (title: string, desc: string) =>
-  new EmbedBuilder().setColor(Colors.Blue).setTitle(title).setDescription(desc).setTimestamp();
+  new EmbedBuilder().setColor(Colors.Blue).setTitle(embedTitle(title)).setDescription(embedDescription(desc)).setTimestamp();
 
 export const warningEmbed = (title: string, desc: string) =>
-  new EmbedBuilder().setColor(Colors.Orange).setTitle(title).setDescription(desc).setTimestamp();
+  new EmbedBuilder().setColor(Colors.Orange).setTitle(embedTitle(title)).setDescription(embedDescription(desc)).setTimestamp();
 
 export const notifyEmbed = (type: 'warning' | 'info' | 'reminder', message: string) => {
   const map = {
@@ -18,7 +47,7 @@ export const notifyEmbed = (type: 'warning' | 'info' | 'reminder', message: stri
     info:     { color: Colors.Blue,   title: 'Information' },
     reminder: { color: Colors.Yellow, title: 'Reminder' },
   };
-  return new EmbedBuilder().setColor(map[type].color).setTitle(map[type].title).setDescription(message).setTimestamp();
+  return new EmbedBuilder().setColor(map[type].color).setTitle(map[type].title).setDescription(embedDescription(message)).setTimestamp();
 };
 
 export const pendingLogEmbed = (d: { userId: string; postId: string; reason: string; loggedBy: string; date: string; pendingId: number; severity?: string }) => {
@@ -28,14 +57,14 @@ export const pendingLogEmbed = (d: { userId: string; postId: string; reason: str
     .setColor(color)
     .setTitle('Pending Log Review')
     .addFields(
-      { name: 'Target',    value: `<@${d.userId}>`,   inline: true },
-      { name: 'Logged By', value: `<@${d.loggedBy}>`, inline: true },
-      { name: 'Severity',  value: (d.severity ?? 'minor').charAt(0).toUpperCase() + (d.severity ?? 'minor').slice(1), inline: true },
-      { name: 'Post ID',   value: d.postId,            inline: true },
-      { name: 'Date',      value: d.date,              inline: true },
-      { name: 'Reason',    value: d.reason },
+      embedField('Target', `<@${d.userId}>`, true),
+      embedField('Logged By', `<@${d.loggedBy}>`, true),
+      embedField('Severity', (d.severity ?? 'minor').charAt(0).toUpperCase() + (d.severity ?? 'minor').slice(1), true),
+      embedField('Post ID', d.postId, true),
+      embedField('Date', d.date, true),
+      embedField('Reason', d.reason),
     )
-    .setFooter({ text: `Pending ID: ${d.pendingId}` })
+    .setFooter({ text: embedFooter(`Pending ID: ${d.pendingId}`) })
     .setTimestamp();
 };
 
@@ -44,10 +73,10 @@ export const appealEmbed = (d: { userId: string; logId: number; reason: string; 
     .setColor(Colors.Purple)
     .setTitle('Appeal Request')
     .addFields(
-      { name: 'Appellant',    value: `<@${d.userId}>`, inline: true },
-      { name: 'Log Type',     value: d.logType,         inline: true },
-      { name: 'Log Reason',   value: d.logReason },
-      { name: 'Appeal Reason', value: d.reason },
+      embedField('Appellant', `<@${d.userId}>`, true),
+      embedField('Log Type', d.logType, true),
+      embedField('Log Reason', d.logReason),
+      embedField('Appeal Reason', d.reason),
     )
-    .setFooter({ text: `Appeal ID: ${d.appealId} | Log ID: ${d.logId}` })
+    .setFooter({ text: embedFooter(`Appeal ID: ${d.appealId} | Log ID: ${d.logId}`) })
     .setTimestamp();

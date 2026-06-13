@@ -7,7 +7,7 @@ import { dmUser } from '../../services/dmService';
 import { config } from '../../config';
 
 export const data = new SlashCommandBuilder()
-  .setName('view_report_status')
+  .setName('view-report-status')
   .setDescription('View who has submitted their weekly report (HPA only)')
   .addIntegerOption(o => o.setName('cycle').setDescription('Cycle ID (defaults to current)'));
 

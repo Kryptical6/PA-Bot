@@ -3,8 +3,8 @@ import {
   ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
 } from 'discord.js';
 import { sql } from '../database/client';
+import { embedDescription, embedField, embedFooter, embedTitle } from '../utils/embeds';
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
 
 // CATEGORY LABELS
 export const TRAIN_CATEGORIES: Record<string, string> = {
@@ -28,7 +28,10 @@ export interface GeneratedPost {
   member_since:   string;
   has_reviews:    boolean;
   post_id:        string;
+  scenario_id:    string;
+  base_scenario_id?: string;
   correct_action: 'approve' | 'deny' | 'request_pof';
+  correct_denial_labels?: string[];
   violation:      string | null;
   explanation:    string;
   difficulty:     'easy' | 'medium' | 'hard';
@@ -85,6 +88,7 @@ export const DENIAL_REASONS: Record<string, DenialReason[]> = {
     { label: 'Fewer than 2 video examples (Scripter/VFX/Anim/SFX)', message: 'Please provide at least 2 video examples showcasing your work.' },
     { label: 'Tutorial work identified',                       message: 'You cannot use tutorial work to apply for this skill.' },
     { label: 'Roblox account not linked to the game or group', message: 'Your post has been rejected due to your account not being visibly or directly linked to the game. Please update the game description, or make identifiable proof of your ownership prior to re-submitting a game creator/group owner request.' },
+    { label: 'Not enough examples for the role',               message: 'Please provide the required number of examples for this skill role.' },
     { label: 'Application contains downloadable examples',     message: 'Please ensure your post does not include downloadable files. You can use a streaming platform such as YouTube.' },
   ],
   // Sourced verbatim from Module 5 - Marketplace Sections (SC table)
@@ -168,516 +172,755 @@ export async function seedDenialReasons(): Promise<void> {
   }
 }
 
-// Random variation seeds injected per call so the model cannot settle into a pattern
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function buildVariationSeed(): string {
-  const writerStyles = [
-    'bullet points with dashes',
-    'short paragraphs with no bullets',
-    'a single flowing paragraph',
-    'numbered sections with bold headers',
-    'casual conversational tone, no formatting at all',
-    'formal business-like tone',
-    'extremely short and terse - 3 to 4 lines only',
-    'very detailed with lots of context, 10 or more lines',
-    'a mix of a short intro paragraph then bullet points',
-    'headers for each section in all-caps',
-  ];
+type TrainingScenario = Omit<GeneratedPost, 'post_id' | 'member_since' | 'difficulty'> & {
+  scenario_id: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+};
 
-  const contactMethods = [
-    'DM me on Discord',
-    'ping me in this server',
-    'reply to this post',
-    'contact me via my portfolio link',
-    'message me on Roblox',
-    'no contact method mentioned at all',
-    'says to add them on Discord (gives username)',
-  ];
+const BASE_SCENARIOS: Record<string, TrainingScenario[]> = {
+  fh: [
+    {
+      scenario_id: 'fh-ui-clean',
+      title: 'For Hire - UI Designer',
+      description: [
+        'TITLE: Clean UI Designer For Hire',
+        'DESCRIPTION: I create Roblox menus, shop interfaces, and HUD layouts. I provide wireframes, polished frames, and Roblox Studio imports.',
+        'PAYMENT: 4,000-5,500 Robux per interface package',
+        'WORK EXAMPLES: https://imgur.com/ui-pack-1 | https://imgur.com/ui-pack-2 | https://imgur.com/ui-pack-3',
+        'CONTACT: DM me on Discord.',
+      ].join('\n'),
+      payment: '4,000-5,500 Robux',
+      category: 'fh-ui',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'The post has a clear payment range within the 1.5x rule, describes one service, and includes enough viewable examples. No denial rule is triggered.',
+      difficulty: 'medium',
+    },
+    {
+      scenario_id: 'fh-builder-negotiable',
+      title: 'For Hire - Builder',
+      description: [
+        'TITLE: Builder For Hire',
+        'DESCRIPTION: I can build maps, interiors, terrain, and simulator lobbies. I have worked on several roleplay maps and cafe builds.',
+        'PAYMENT: Negotiable, we can discuss after you DM me.',
+        'WORK EXAMPLES: https://imgur.com/build-a | https://imgur.com/build-b',
+      ].join('\n'),
+      payment: 'Negotiable',
+      category: 'fh-building',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['No payment stated or range makes no sense'],
+      violation: 'No valid payment stated',
+      explanation: 'The handbook says negotiable alone is not valid payment. A fixed price, fixed minimum, or valid range is required.',
+      difficulty: 'easy',
+    },
+    {
+      scenario_id: 'fh-scripter-download-discord',
+      title: 'For Hire - Scripter',
+      description: [
+        'TITLE: Scripter For Hire',
+        'DESCRIPTION: I make combat, inventory, and datastore systems.',
+        'PAYMENT: 12,000 Robux per system',
+        'WORK EXAMPLES: https://example.com/combat-system.rbxl',
+        'CONTACT: Join discord.gg/example to order.',
+      ].join('\n'),
+      payment: '12,000 Robux',
+      category: 'fh-scripting',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Discord server links in the post', 'Examples are downloadable files', 'Fewer than 2 video examples (Scripter/VFX/Anim/SFX)'],
+      violation: 'Discord server link and downloadable example',
+      explanation: 'Discord server advertising is not allowed in posts, and examples must not require a download. Scripting posts also need at least two video examples.',
+      difficulty: 'easy',
+    },
+    {
+      scenario_id: 'fh-animator-pof',
+      title: 'For Hire - Animator',
+      description: [
+        'TITLE: Animator Available',
+        'DESCRIPTION: I create combat and movement animations for Roblox rigs.',
+        'PAYMENT: 35,000 Robux for a full combat pack',
+        'WORK EXAMPLES: https://youtube.com/watch?v=anim1 | https://youtube.com/watch?v=anim2 | https://youtube.com/watch?v=anim3',
+      ].join('\n'),
+      payment: '35,000 Robux',
+      category: 'fh-animation',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'The post is otherwise clean, includes the required video examples, and is a For Hire post. Proof of Funds is not requested for FH posts.',
+      difficulty: 'hard',
+    },
+  ],
+  lfd: [
+    {
+      scenario_id: 'lfd-combat-clean',
+      title: 'Looking For Developer - Combat Scripter',
+      description: [
+        'TITLE: Hiring Combat Scripter',
+        'DESCRIPTION: Need a scripter for melee hitboxes, cooldowns, stamina, and basic data saving.',
+        'PAYMENT: 18,000-24,000 Robux',
+        'DEADLINE: 2 weeks',
+        'CONTACT: DM me with previous systems.',
+      ].join('\n'),
+      payment: '18,000-24,000 Robux',
+      category: 'lfd-scripting',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'The post has a clear scope, valid payment, and one developer role. No denial rule is triggered.',
+      difficulty: 'medium',
+    },
+    {
+      scenario_id: 'lfd-builder-revshare-deadline',
+      title: 'Looking For Developer - Builder',
+      description: [
+        'TITLE: Need Builder Today',
+        'DESCRIPTION: Need a full simulator lobby, shop area, portals, terrain, and spawn area.',
+        'PAYMENT: 20% revenue share only',
+        'DEADLINE: 48 hours',
+      ].join('\n'),
+      payment: '20% revenue share',
+      category: 'lfd-building',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Offering only % or uncertain game revenue'],
+      violation: 'Percentage-only payment',
+      explanation: 'Revenue share cannot be the only payment. The deadline is not used as the denial reason for this scenario.',
+      difficulty: 'easy',
+    },
+    {
+      scenario_id: 'lfd-ui-wide-range',
+      title: 'Looking For Developer - UI Designer',
+      description: [
+        'TITLE: Hiring UI Designer',
+        'DESCRIPTION: Need someone to design and import a complete shop, inventory, settings menu, and daily rewards UI.',
+        'PAYMENT: 1,000-2,000 Robux',
+        'DEADLINE: 1 week',
+      ].join('\n'),
+      payment: '1,000-2,000 Robux',
+      category: 'lfd-ui',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Payment range is too wide'],
+      violation: 'Payment range exceeds 1.5x base',
+      explanation: 'A 1,000-2,000 Robux range is 2x the base payment. The handbook caps ranges at 1.5x the base unless the payment is small enough to bypass the rule.',
+      difficulty: 'medium',
+    },
+  ],
+  skill_role: [
+    {
+      scenario_id: 'skill-builder-clean',
+      title: 'Skill Role Application - Builder',
+      description: [
+        'APPLICATION FOR: Builder - Beginner',
+        'EXAMPLES: https://imgur.com/build1 | https://imgur.com/build2 | https://imgur.com/build3',
+        'NOTES: All builds are original and finished.',
+      ].join('\n'),
+      payment: null,
+      category: 'skill_role-builder-beginner',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'This application provides enough examples for the requested role. Proof of ownership is only needed when requested, so no denial rule is triggered.',
+      difficulty: 'medium',
+    },
+    {
+      scenario_id: 'skill-gfx-clean',
+      title: 'Skill Role Application - GFX',
+      description: [
+        'APPLICATION FOR: Graphics Designer - Beginner',
+        'EXAMPLES: https://imgur.com/gfx1 | https://imgur.com/gfx2 | https://imgur.com/gfx3',
+      ].join('\n'),
+      payment: null,
+      category: 'skill_role-gfx-beginner',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'The application includes enough viewable examples for the role. No denial rule is triggered.',
+      difficulty: 'easy',
+    },
+    {
+      scenario_id: 'skill-animator-two-examples',
+      title: 'Skill Role Application - Animator',
+      description: [
+        'APPLICATION FOR: Animator - Beginner',
+        'EXAMPLES: https://youtube.com/watch?v=idlepack | https://youtube.com/watch?v=walkcycle',
+      ].join('\n'),
+      payment: null,
+      category: 'skill_role-animation-beginner',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Not enough examples for the role'],
+      violation: 'Not enough examples',
+      explanation: 'The role guidelines require a minimum of 3 examples unless otherwise specified. This application only provides two animation examples.',
+      difficulty: 'medium',
+    },
+  ],
+  sell_creations: [
+    {
+      scenario_id: 'sc-ui-pack-clean',
+      title: 'Sell Creations - UI Pack',
+      description: [
+        'TITLE: Selling Sci-Fi UI Pack',
+        'DESCRIPTION: Includes shop, inventory, settings, and notification frames. Fully editable PSD and Roblox Studio import included.',
+        'PAYMENT: 8,000 Robux',
+        'SHOWCASE: https://imgur.com/uipack1 | https://imgur.com/uipack2 | https://imgur.com/uipack3',
+      ].join('\n'),
+      payment: '8,000 Robux',
+      category: 'sell_creations',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'The post is selling an allowed asset, includes a clear payment, and provides enough directly viewable examples.',
+      difficulty: 'medium',
+    },
+    {
+      scenario_id: 'sc-tycoon-game',
+      title: 'Sell Creations - Complete Tycoon Game',
+      description: [
+        'TITLE: Selling Complete Tycoon Game',
+        'DESCRIPTION: Fully scripted tycoon game with map, datastore, shop, rebirths, and monetization.',
+        'PAYMENT: 50,000 Robux',
+        'SHOWCASE: https://youtube.com/watch?v=tycoonshowcase',
+      ].join('\n'),
+      payment: '50,000 Robux',
+      category: 'sell_creations',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Selling a game or group'],
+      violation: 'Selling a game',
+      explanation: 'Selling games or groups is prohibited in Sell Creations. This should be denied even though it has payment and a showcase.',
+      difficulty: 'easy',
+    },
+    {
+      scenario_id: 'sc-props-scam-log',
+      title: 'Sell Creations - Asset Pack',
+      description: [
+        'TITLE: Selling Medieval Props',
+        'DESCRIPTION: A pack of crates, banners, barrels, and shop stands.',
+        'PAYMENT: 2,500 Robux',
+        'SHOWCASE: https://imgur.com/props1 | https://imgur.com/props2',
+        'ABOUT THIS USER: 1 scam log found.',
+      ].join('\n'),
+      payment: '2,500 Robux',
+      category: 'sell_creations',
+      scam_logs: 1,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['1 scam log found'],
+      violation: '1 scam log',
+      explanation: 'Sell Creations requires a clean record due to fraud risk. One scam log is enough to deny the post.',
+      difficulty: 'easy',
+    },
+  ],
+  investors: [
+    {
+      scenario_id: 'investors-dungeon-clean',
+      title: 'Investors - Dungeon RPG',
+      description: [
+        'TITLE: Seeking Investors for Dungeon RPG',
+        'DESCRIPTION: Game is around 70% complete with combat, inventory, quests, UI, maps, and monetization implemented.',
+        'INVESTMENT SOUGHT: 80,000 Robux',
+        'REVENUE SHARE: 20%',
+        'SHOWCASE: 6 images covering map, UI, combat, inventory, shop, and quest systems.',
+      ].join('\n'),
+      payment: '80,000 Robux sought, 20% revenue share',
+      category: 'investors',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'The post offers at least 15% revenue share, gives a clear investment amount, shows enough images, and the game is over 55% complete.',
+      difficulty: 'hard',
+    },
+    {
+      scenario_id: 'investors-simulator-low-share',
+      title: 'Investors - Simulator',
+      description: [
+        'TITLE: Need Investors for Simulator',
+        'DESCRIPTION: Game is about 35% complete. Basic map and one pet system are done.',
+        'INVESTMENT SOUGHT: 25,000 Robux',
+        'REVENUE SHARE: 10%',
+        'SHOWCASE: 3 images.',
+      ].join('\n'),
+      payment: '25,000 Robux sought, 10% revenue share',
+      category: 'investors',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Offering less than 15% revenue share', 'Game is less than 55% complete'],
+      violation: 'Below 15% revenue share and under 55% complete',
+      explanation: 'Investors posts must offer at least 15% revenue share and the game must be at least 55% complete based on the images.',
+      difficulty: 'easy',
+    },
+    {
+      scenario_id: 'investors-complete-no-link',
+      title: 'Investors - Finished Obby',
+      description: [
+        'TITLE: Seeking Investor for Finished Obby',
+        'DESCRIPTION: Game is 100% complete and ready to advertise.',
+        'INVESTMENT SOUGHT: 30,000 Robux',
+        'REVENUE SHARE: 25%',
+        'SHOWCASE: 5 images attached.',
+        'GAME LINK: Not available yet.',
+      ].join('\n'),
+      payment: '30,000 Robux sought, 25% revenue share',
+      category: 'investors',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Game is 100% complete but no game link provided'],
+      violation: 'Complete game missing link',
+      explanation: 'A game declared 100% complete must include a playable game link so investors can assess it.',
+      difficulty: 'medium',
+    },
+  ],
+  advertising: [
+    {
+      scenario_id: 'ads-td-clean',
+      title: 'Roblox Advertising - Tower Defense Game',
+      description: [
+        'TITLE: Play Neon Tower Defense',
+        'DESCRIPTION: Public Roblox tower defense game with waves, upgrades, bosses, and trading.',
+        'GAME LINK: https://roblox.com/games/123456/neon-td',
+      ].join('\n'),
+      payment: null,
+      category: 'advertising',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'Advertising posts must be for a Roblox game, group, or platform product. This is a public playable Roblox game.',
+      difficulty: 'medium',
+    },
+    {
+      scenario_id: 'ads-service-promo',
+      title: 'Roblox Advertising - Development Services',
+      description: [
+        'TITLE: Advertising My Building Services',
+        'DESCRIPTION: I build maps, cafes, and simulator lobbies. Join my server for prices and examples.',
+        'LINK: discord.gg/builderhub',
+      ].join('\n'),
+      payment: null,
+      category: 'advertising',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Advertising services instead of a game/group/product'],
+      violation: 'Advertising services instead of a Roblox creation',
+      explanation: 'The advertising category is for Roblox games, groups, or platform products only. Services and Discord server promotion do not belong there.',
+      difficulty: 'easy',
+    },
+  ],
+  reviews: [
+    {
+      scenario_id: 'reviews-ui-clean',
+      title: 'Review - UI Commission',
+      description: [
+        'TITLE: Review for pixelNova',
+        'PRODUCT: Custom inventory and shop UI delivered in Roblox Studio.',
+        'PRODUCT PROOF: https://imgur.com/product-proof',
+        'PAYMENT PROOF: https://imgur.com/payment-proof',
+        'REVIEW: Fast communication and delivered exactly what I requested.',
+      ].join('\n'),
+      payment: null,
+      category: 'reviews',
+      scam_logs: 0,
+      has_reviews: true,
+      correct_action: 'approve',
+      violation: null,
+      explanation: 'The review includes product proof, matching payment proof, and is about a RoDevs developer service.',
+      difficulty: 'medium',
+    },
+    {
+      scenario_id: 'reviews-scam-report',
+      title: 'Review - Scam Report',
+      description: [
+        'TITLE: Bad review for user123',
+        'PRODUCT: They never delivered anything.',
+        'PAYMENT PROOF: https://imgur.com/payment',
+        'REVIEW: This user scammed me, please ban them.',
+      ].join('\n'),
+      payment: null,
+      category: 'reviews',
+      scam_logs: 0,
+      has_reviews: false,
+      correct_action: 'deny',
+      correct_denial_labels: ['Review is about being scammed'],
+      violation: 'Review is a scam report',
+      explanation: 'Reviews are for completed service feedback. Scam reports must go through ModMail instead of the reviews channel.',
+      difficulty: 'easy',
+    },
+  ],
+};
 
-  const priceSeeds = [
-    'exactly 500 Robux flat',
-    'exactly 1,200 Robux flat',
-    'exactly 3,000 Robux flat',
-    'exactly 8,500 Robux flat',
-    'exactly 15,000 Robux flat',
-    'exactly 22,000 Robux flat',
-    'exactly $5 USD flat',
-    'exactly $12 USD flat',
-    'exactly $30 USD flat',
-    'exactly $75 USD flat',
-    'exactly $150 USD flat',
-    'a range of 800 to 1,000 Robux',
-    'a range of 1,500 to 3,000 Robux',
-    'a range of 5,000 to 9,000 Robux',
-    'a range of $8 to $15 USD',
-    'a range of $20 to $40 USD',
-    'a range of $50 to $100 USD',
-    '300 Robux per icon / asset',
-    '1,000 Robux per map section',
-    '$5 USD per minute of video',
-    '20% revenue share plus 2,000 Robux upfront',
-    'negotiable with a stated minimum of 1,500 Robux',
-    'negotiable with a stated minimum of $10 USD',
-    'exactly 35,000 Robux flat (triggers POF - post must be clean)',
-    'exactly $220 USD flat (triggers POF - post must be clean)',
-    'exactly 50,000 Robux flat (triggers POF - post must be clean)',
-    'percentage only - 15% revenue share with no fixed price (VIOLATION)',
-    'no payment mentioned anywhere in the post (VIOLATION)',
-    'says "negotiable" with no minimum stated (VIOLATION)',
-    'a range of 1,000 to 1,800 Robux where base is 1,000 - this is 1.8x (VIOLATION: exceeds 1.5x limit)',
-  ];
-
-  const developerRoles = [
-    'scripter specialising in combat systems',
-    'scripter specialising in datastore and saving',
-    'scripter specialising in tycoon systems',
-    'GFX designer for thumbnails and game icons',
-    'UI/UX designer',
-    'low-poly Roblox modeler',
-    'high-poly Blender modeler',
-    'animator for rigs and cutscenes',
-    'VFX artist for particles and beams',
-    'sound designer and composer',
-    'SFX artist',
-    'video editor for trailers and showcases',
-    'thumbnail and logo artist',
-    'clothing designer for shirts and pants',
-    'map builder specialising in medieval or sci-fi themes',
-    'terrain artist using studio terrain tools',
-    'project manager',
-    'game tester',
-    'advertiser or social media marketer',
-  ];
-
-  const postTitles = [
-    'a first-person title such as "I am a scripter looking for work"',
-    'a third-person noun phrase such as "Experienced GFX Designer Available"',
-    'a short service name such as "Scripting Services"',
-    'an attention-grabbing phrase such as "Clean UI at Affordable Prices"',
-    'a plain factual header such as "For Hire: Animator"',
-    'all lowercase casual title such as "looking to build your game"',
-    'a question title such as "Need a reliable scripter?"',
-  ];
-
-  const memberDurations = [
-    '3 weeks ago', '5 weeks ago', '2 months ago', '4 months ago',
-    '6 months ago', '9 months ago', '11 months ago', '14 months ago',
-    '17 months ago', '20 months ago', '22 months ago',
-  ];
-
-  const portfolioStyles = [
-    'two YouTube video links listed as examples',
-    'one YouTube link and one Devforum post',
-    'an Imgur album link',
-    'a Google Drive folder link',
-    'a personal portfolio website URL',
-    'a Devforum portfolio thread link',
-    'inline descriptions of 3 past projects with no external links',
-    'no portfolio or examples provided',
-    'only one YouTube link (possible violation)',
-    'three strong streaming examples across different projects',
-    'screenshots embedded via Imgur links',
-  ];
-
-  return [
-    `Post writing style: ${pickRandom(writerStyles)}.`,
-    `Contact method: ${pickRandom(contactMethods)}.`,
-    `Payment: use ${pickRandom(priceSeeds)}.`,
-    `Service type: ${pickRandom(developerRoles)}.`,
-    `Title style: ${pickRandom(postTitles)}.`,
-    `Account age: member joined roughly ${pickRandom(memberDurations)}.`,
-    `Portfolio/examples: ${pickRandom(portfolioStyles)}.`,
-  ].join(' ');
+function randomPostId(category: string): string {
+  const n = String(Math.floor(100000 + Math.random() * 900000));
+  return category.startsWith('skill_role') ? `a${n}` : n;
 }
 
-// GENERATE POST VIA GPT-4o-mini
-export async function generateTrainingPost(category: string): Promise<GeneratedPost | null> {
-  const actualCategory = category === 'mixed'
-    ? (['fh', 'lfd', 'skill_role', 'sell_creations', 'investors', 'advertising', 'reviews'] as const)[
-        Math.floor(Math.random() * 7)
-      ]
-    : category;
+function randomMemberSince(): string {
+  const monthsAgo = Math.floor(2 + Math.random() * 22);
+  const d = new Date();
+  d.setMonth(d.getMonth() - monthsAgo);
+  d.setDate(Math.floor(1 + Math.random() * 24));
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+}
 
-  const difficultyRoll = Math.random();
-  const difficulty: 'easy' | 'medium' | 'hard' =
-    difficultyRoll < 0.33 ? 'easy' : difficultyRoll < 0.66 ? 'medium' : 'hard';
-
-  const exampleRows = await sql`
-    SELECT post_body, correct_action, reasoning
-    FROM post_train_examples
-    WHERE category = ${actualCategory} AND active = true
-    ORDER BY RANDOM()
-    LIMIT 5
-  `.catch(() => []);
-
-  const noteRows = await sql`
-    SELECT note FROM post_train_notes
-    WHERE active = true AND (category IS NULL OR category = ${actualCategory})
-    ORDER BY category NULLS LAST, id ASC
-  `.catch(() => []);
-
-  const systemPrompt = buildSystemPrompt(exampleRows as any[], noteRows.map((r: any) => r.note));
-  const userPrompt   = buildUserPrompt(actualCategory, difficulty);
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model:       'gpt-4o-mini',
-        max_tokens:  1400,
-        temperature: 1.0,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user',   content: userPrompt   },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[PostTrain] OpenAI error ${response.status}: ${errText}`);
-      return null;
+function parseScenarioLines(description: string): Record<string, string> {
+  const parsed: Record<string, string> = {};
+  for (const line of description.split('\n').map(l => l.trim()).filter(Boolean)) {
+    const match = line.match(/^([^:]{2,40}):\s*(.+)$/);
+    if (match) {
+      parsed[match[1].toLowerCase()] = match[2];
+    } else {
+      parsed.description = parsed.description ? `${parsed.description} ${line}` : line;
     }
-
-    const data  = await response.json() as any;
-    const raw   = data.choices?.[0]?.message?.content ?? '';
-    const clean = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    const parsed: GeneratedPost = JSON.parse(clean);
-    parsed.difficulty = difficulty;
-    return parsed;
-  } catch (e) {
-    console.error('[PostTrain] Generation failed:', e);
-    return null;
   }
+  return parsed;
 }
 
-// SYSTEM PROMPT
-function buildSystemPrompt(examples: { post_body: string; correct_action: string; reasoning: string }[], notes: string[]): string {
-  let examplesBlock = '';
-  if (examples.length > 0) {
-    examplesBlock = '\n\nSENIOR STAFF REFERENCE EXAMPLES (real reviewed posts submitted by your senior staff team - use these to calibrate tone, format, and rule application accuracy):\n';
-    examples.forEach((ex, idx) => {
-      examplesBlock += `\nExample ${idx + 1}:\nPost: ${ex.post_body}\nCorrect action: ${ex.correct_action}\nReasoning: ${ex.reasoning}\n`;
-    });
-    examplesBlock += '\nUse these examples to understand what real posts in this category look like and how rules are applied. Do NOT copy them directly - generate something new and different.';
-  }
-
-  let notesBlock = '';
-  if (notes.length > 0) {
-    notesBlock = '\n\nSTAFF RULE NOTES AND OVERRIDES (these take priority over the standard rules above - follow them exactly):\n';
-    notes.forEach((note, idx) => {
-      notesBlock += `\n${idx + 1}. ${note}`;
-    });
-    notesBlock += '\n';
-  }
-
-  return `You are a post generator for a Roblox marketplace staff training tool called RoDevs. You generate fake but realistic marketplace posts for Post Approver trainees to review.
-
-Your output must be different every single time. Vary the writing style, structure, price, developer name, service type, number of lines, tone, and content. No two posts should feel like they came from the same template. You will be given a variation seed - follow every instruction in it exactly, especially the payment amount.${examplesBlock}
-
-MARKETPLACE CATEGORIES:
-- fh: For Hire - developers advertising their services
-- lfd: Looking For Developer - users hiring developers
-- skill_role: Skill Role Applications - developers proving skill to unlock a posting category
-- sell_creations: Sell Creations (SC) - users selling ready-made completed assets
-- investors: Investor Posts - developers seeking financial investment for a Roblox game
-- advertising: Roblox Advertising (Ads) - advertising a Roblox game, group, or platform product
-- reviews: Reviewals - users leaving feedback about a completed developer transaction
-
-OFFICIAL RULES (sourced directly from the Post Approver Handbook and RoDevs training modules):
-
-== GENERAL RULES (apply to ALL categories) ==
-- Every post must state a clear payment and payment method (Robux or USD). "Negotiable" or "can be discussed" alone is not acceptable - a fixed minimum or price range is required.
-- Price ranges must NOT exceed 1.5x the minimum. Example: base 5,000 R$ -> max allowed 7,500 R$. Base 1,000 R$ -> max 1,500 R$.
-- Percentages (revenue share) are NOT a valid standalone payment. A fixed price must also be provided.
-- Posts must be professional, clear, and well formatted. Poor grammar or spelling that makes a post hard to read = DENY.
-- Low-quality or poorly described services = DENY.
-- No plagiarism or stolen assets of any kind.
-- Tutorial work is not acceptable as a portfolio example.
-- AI-generated work as examples = suspension in real reviews, but in training treat as DENY since examples cannot be seen.
-- Selling games or groups is not allowed in any category.
-- Free models/free vectors prohibited unless explicitly declared as filler/placeholder.
-- No exploit, virus, malware, or worm related services.
-- Posting on behalf of others (commission finders, recruiters) is prohibited. Denial: "Recruiters are prohibited on the RoDevs marketplace."
-- No Discord server links in posts.
-- No AFK/clicker/scam games.
-- No server creation or management services.
-- Multi-hiring in a single post is prohibited. One service/role per post.
-- No CustomUse.
-- Idea makers, concept creators, and story writers are prohibited from FH (they may post in lfd-others only).
-- Selling plugins is not allowed.
-- LFD posts with a commission deadline under 3 days are not allowed.
-
-== PAYMENT TIER MINIMUMS FOR LFD (critical for underpayment violations) ==
-Tier assignment: Beginner = 1-2 hours, one very simple task | Simple = a few hours, one small polished task | Standard = several hours to a couple days, multiple assets or one proper system | Complex = multiple days to weeks, large systems or many deliverables. When in doubt, tier up. Multiple small tasks combined = bump up a tier.
-
-Scripter (Roblox Lua): Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 18,000 R$/$70 | Complex 70,000 R$/$280
-Programmer (external code/bots/APIs): Beginner 4,000 R$/$15 | Simple 10,000 R$/$40 | Standard 30,000 R$/$120 | Complex 100,000 R$/$400
-GFX Designer: Beginner 1,000 R$/$4 | Simple 2,000 R$/$8 | Standard 5,000 R$/$20 | Complex 12,000 R$/$50
-UI Designer: Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 15,000 R$/$60 | Complex 35,000 R$/$140
-Clothing Designer: Beginner 800 R$/$3 | Simple 1,500 R$/$6 | Standard 4,000 R$/$15 | Complex 10,000 R$/$40
-Builder: Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 18,000 R$/$70 | Complex 45,000 R$/$180
-Modeler: Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 15,000 R$/$60 | Complex 40,000 R$/$160
-Animator: Beginner 1,500 R$/$6 | Simple 3,000 R$/$12 | Standard 8,000 R$/$30 | Complex 25,000 R$/$100
-VFX Artist: Beginner 2,000 R$/$8 | Simple 5,000 R$/$20 | Standard 10,000 R$/$40 | Complex 25,000 R$/$100
-SFX Artist: Beginner 800 R$/$3 | Simple 1,500 R$/$6 | Standard 4,000 R$/$15 | Complex 10,000 R$/$40
-Music Artist: Beginner 1,000 R$/$4 | Simple 2,000 R$/$8 | Standard 6,000 R$/$25 | Complex 15,000 R$/$60
-Video Editor: Beginner 1,500 R$/$6 | Simple 3,000 R$/$12 | Standard 8,000 R$/$30 | Complex 20,000 R$/$80
-
-== FOR HIRE (FH) ==
-- At least 2 work examples required for all FH posts.
-- Scripting, animation, VFX, SFX, sound, and video posts require at least 2 VIDEO examples.
-- Examples must not require a download to view - streaming platforms only.
-- Low-quality examples or phone camera photos of a screen = DENY.
-- FH does NOT use tier minimum payment tables (those are for LFD only). Any clearly stated fixed payment or valid range is acceptable for FH.
-- Description must be clear and structured. Vague tasks: "Description too vague, please elaborate on the tasks expected from the developer and repost." Hard to read layout: "Description format makes it hard to read. Please provide a more structured post."
-
-== LOOKING FOR DEVELOPER (LFD) ==
-- Must clearly describe the scope of work, offer fair payment (meeting tier minimums), and have a deadline of at least 3 days.
-- Denial for underpayment: "Underpayment. Please ensure that you are paying developers fairly."
-- Denial for range too wide: "Payment range is too wide. Please decrease it before posting again."
-- Denial for no payment: "Please state a valid range/fixed payment, so that your budget is clear to developers."
-- Denial for percentage-only: "Payment relying solely on percentage of game revenue is prohibited on the RoDevs marketplace."
-- Denial for vague description: "Lack of information. Please provide a clear description so developers understand what you are looking for."
-- Denial for tasks not detailed: "Description too vague, please elaborate on the tasks expected from the developer and repost."
-- Denial for poor structure: "Description format makes it hard to read. Please provide a more structured post."
-- 2 scam logs = DENY.
-
-== SKILL ROLE APPLICATIONS ==
-- At least 3 examples required (skill roles require more evidence than standard FH).
-- Scripting, VFX, Animation, SFX, and Sound roles require at least 2 VIDEO examples.
-- Tutorial work = DENY: "You cannot use tutorial work to apply for this skill."
-- No downloadable files.
-- Roblox account must be linked for game creator or group owner applications.
-- Standard post format: APPLICATION FOR: [role-tier] | Experience: [X years] | Examples: [links] | Created by: [username] ([userID]) | ID: [postID].
-
-== SELL CREATIONS (SC) ==
-- No selling games, groups, or scripted maps.
-- At least 2 examples required. Scripted systems, VFX, and animations require a video example.
-- Denial for no product description: "Please provide an explanation/description about the product you are selling."
-- Denial for excess free filler: "Excess use of free filler/placeholder assets. Please replace these with your own assets."
-- No downloadable files.
-- 1 scam log = DENY.
-
-== INVESTOR POSTS ==
-- Must offer at least 15% revenue share. Below 15% = DENY.
-- Revenue share above 90% = effectively selling the game = DENY.
-- Must state a clear fixed amount or valid range for investment sought.
-- At least 5 images required covering all aspects of the game.
-- Game must be at least 55% complete.
-- If game is 100% complete, a playable game link must be included.
-- 1 scam log = DENY.
-- Free models are allowed in small amounts in investor posts.
-
-== ROBLOX ADVERTISING ==
-- Must be a publicly playable Roblox game, group, or Roblox platform product.
-- No AFK games, scam games, services, or off-platform content.
-- Denial for services: "Advertising services in this category are prohibited. This category is meant for advertising a game, group, or a product on the Roblox platform."
-- Denial for not Roblox: "This category is meant to advertise users' creations on the Roblox platform (games, groups, or products on the Roblox platform)."
-- Denial for not playable: "Game must be available to play."
-
-== REVIEWALS ==
-- Must include image proof of the product received. Denial: "Please provide image proof showcasing the product."
-- Must include image evidence of payment. Denial: "Please provide image evidence verifying the payment."
-- No insulting/vulgar language: "Please refrain from using any insults or vulgar language."
-- No fake reviews: "Please do not attempt to make fake reviews to deceive users."
-- Scam reports go to ModMail: "Please make a scam report by DMing modmail to report this user for scamming."
-- Transaction must be from RoDevs: "Please only make reviews for transactions and services made inside RoDevs."
-- Payment proof must match product: "Please only post proof of payment for the product you are reviewing."
-
-== PROOF OF FUNDS (request_pof action) ==
-- Required when a post offers 30,000 Robux or more, or $200 USD or more.
-- The post must pass ALL other checks first. Never request POF on a post that has any rule violation.
-- If threshold met AND post is completely clean = correct_action is "request_pof".
-- If threshold met AND post has any violation = correct_action is "deny".
-
-== APPROVE ==
-- Post meets all rules, no violations, POF threshold not met.
-
-correct_action must be one of: "approve", "deny", "request_pof". Do NOT use "suspend".
-${notesBlock}
-Respond with ONLY valid raw JSON, no markdown fences, no preamble.
-JSON structure:
-{
-  "title": "string",
-  "description": "string - the full post body formatted like a real marketplace post with correct section headers",
-  "payment": "string or null",
-  "category": "string - e.g. fh-scripting, fh-gfx, fh-ui, fh-animation, fh-modeling, fh-sfx, fh-vfx, fh-video, lfd-scripting, lfd-modeling, lfd-animation, lfd-gfx, lfd-ui, lfd-sfx, lfd-music, skill_role-builder-beginner, skill_role-gfx-standard, sell_creations, investors, advertising, reviews",
-  "scam_logs": 0,
-  "member_since": "DD Month YYYY",
-  "has_reviews": false,
-  "post_id": "6-digit number as a string",
-  "correct_action": "approve" or "deny" or "request_pof",
-  "violation": "short specific plain label or null",
-  "explanation": "2-3 sentences. Name the exact rule, state the specific threshold or requirement violated, and confirm why the correct_action is right.",
-  "difficulty": "easy" or "medium" or "hard"
-}`;
+function randomCode(): string {
+  return Math.random().toString(36).slice(2, 7);
 }
 
-// USER PROMPT
-function buildUserPrompt(category: string, difficulty: 'easy' | 'medium' | 'hard'): string {
-  const diffGuide: Record<string, string> = {
-    easy: [
-      'The violation must be completely unmissable - visible in the first 1-2 sentences or stated plainly.',
-      'Best easy violations: FH/LFD - no payment at all, a discord.gg link in the first line, zero examples provided, deadline explicitly stated as 1 or 2 days, developer openly states posting on behalf of someone else.',
-      'SC - developer says they are selling a Roblox game or a scripted map. 1 scam log shown.',
-      'Investors - offers 5% revenue share, posts only 2 images, or game is 10% complete.',
-      'Advertising - post is a service advertisement not a game, or game is private/unpublished.',
-      'Reviews - post is a scam report saying the developer scammed them, or no payment proof at all.',
-    ].join(' '),
-    medium: [
-      'The post looks mostly legitimate on first read. The violation requires rule knowledge to catch.',
-      'Good options: FH/LFD - price range that is 1.7x or 1.8x the base (e.g. 1,000 to 1,800 R$ where base is 1,000, max allowed is 1,500), only one example where two are required, LFD deadline of "about 48 hours" or "2 days", LFD underpayment that is below the tier minimum but not zero.',
-      'LFD underpayment example: hiring a scripter for a full inventory system with datastore (Standard tier, minimum 18,000 R$) but offering only 3,000 R$.',
-      'SC: no description of the product at all.',
-      'Alternatively: write a completely clean correct post - APPROVE is the most common missed answer for trainees.',
-    ].join(' '),
-    hard: [
-      'This is a genuine edge case. Choose one:',
-      '(1) Completely clean professional post - must be APPROVED. Make it convincingly realistic.',
-      '(2) Clean post triggering POF - everything correct but payment is 35,000 R$ or $220 USD or more.',
-      '(3) Subtle range violation: price is exactly 1,000-1,600 R$ where base is 1,000 (1.6x, limit is 1.5x = max 1,500 R$).',
-      '(4) LFD underpayment requiring tier tables: e.g. complex builder commission (full open world map, multiple biomes, minimum 45,000 R$) offered at 8,000 R$.',
-      '(5) Skill role with only 2 examples instead of the required 3.',
-      'Lean towards approve or request_pof for hard.',
-    ].join(' '),
-  };
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
-  const violationPool: Record<string, string[]> = {
+function sample<T>(items: T[], min: number, max: number): T[] {
+  const count = Math.max(min, Math.min(max, Math.floor(min + Math.random() * (max - min + 1))));
+  return shuffle(items).slice(0, count);
+}
+
+function varyLinks(text: string): string {
+  return text
+    .replace(/ui-pack-(\d+)/g, `ui-${randomCode()}-$1`)
+    .replace(/build-([ab])/g, `build-${randomCode()}-$1`)
+    .replace(/anim(\d+)/g, `anim-${randomCode()}-$1`)
+    .replace(/gfx(\d+)/g, `gfx-${randomCode()}-$1`)
+    .replace(/props(\d+)/g, `props-${randomCode()}-$1`)
+    .replace(/product-proof/g, `product-${randomCode()}`)
+    .replace(/payment-proof|payment(?!\\s)/g, `payment-${randomCode()}`)
+    .replace(/123456/g, String(Math.floor(100000 + Math.random() * 900000)));
+}
+
+function randomUsername(): string {
+  const starts = ['orbit', 'lunar', 'byte', 'nova', 'pixel', 'signal', 'vector', 'craft', 'ember', 'atlas'];
+  const ends = ['dev', 'works', 'studio', 'rbx', 'forge', 'labs', 'maker', 'builds', 'ui', 'scripts'];
+  return `${pickRandom(starts)}_${pickRandom(ends)}${Math.floor(10 + Math.random() * 90)}`;
+}
+
+function randomProjectName(): string {
+  const first = ['Neon', 'Cobalt', 'Skyline', 'Moonlit', 'Pixel', 'Arcade', 'Ironwood', 'Nova', 'Harbor', 'Crystal'];
+  const second = ['Vale', 'Quest', 'District', 'Labs', 'Rush', 'Frontier', 'Haven', 'Forge', 'Arena', 'Tycoon'];
+  return `${pickRandom(first)} ${pickRandom(second)}`;
+}
+
+function randomAvailability(): string {
+  return pickRandom([
+    'I can start after the scope is confirmed.',
+    'I am usually active in the evening and can reply the same day.',
+    'Please include references or a short brief when messaging.',
+    'I can discuss exact timing once the post is approved.',
+    'I prefer to agree on milestones before any work starts.',
+  ]);
+}
+
+function uniquePostDetail(category: string): string {
+  const base = category.split('-')[0];
+  const project = randomProjectName();
+  const username = randomUsername();
+  const ref = `${randomCode().toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+  const variants: Record<string, string[]> = {
     fh: [
-      'no payment stated anywhere in the post',
-      'price range exceeds 1.5x the base - e.g. 1,000 to 2,000 R$ where max allowed is 1,500',
-      'Discord server invite link in the post body',
-      'only one example provided where at least two are required',
-      'developer explicitly states they are posting on behalf of a client or group',
-      'two different services advertised in one post (multi-hire)',
-      'no work examples provided at all',
-      'downloadable file is the only example link',
-      'very poor grammar making the post difficult to understand',
+      `Portfolio note: most of my recent work is under the name ${username}, folder ${ref}.`,
+      `Preferred project style: ${project}-type commissions with clear references, ref ${ref}.`,
+      `Current queue: ${Math.floor(1 + Math.random() * 4)} open slot${Math.random() > 0.5 ? 's' : ''}; booking ref ${ref}.`,
     ],
     lfd: [
-      'deadline explicitly stated as 1 or 2 days',
-      'no payment mentioned anywhere',
-      'percentage-only revenue share with no fixed price',
-      'payment is clearly below the tier minimum for the scope described',
-      'payment range exceeds 1.5x the lower bound',
-      'Discord server link included',
-      'two developer roles in a single post',
-      'two scam logs shown at the bottom of the post',
-      'description so vague the scope cannot be determined',
+      `Project codename: ${project}, brief ${ref}.`,
+      `Team contact: ${username}, please send examples first and mention ${ref}.`,
+      `Current build status: ${pickRandom(['prototype', 'early alpha', 'menu and map started', 'systems planned'])}; task ref ${ref}.`,
     ],
     skill_role: [
-      'only 2 examples where at least 3 are required',
-      'tutorial used as the primary example',
-      'downloadable file instead of a streaming link',
-      'no Roblox account linked for a game creator or group owner application',
-      'examples are not visible - links are broken or private',
+      `Application handle: ${username}, portfolio ref ${ref}.`,
+      `Most recent example was made for ${project}, proof ref ${ref}.`,
+      `Portfolio update: ${Math.floor(2 + Math.random() * 6)} examples were made this month, batch ${ref}.`,
     ],
     sell_creations: [
-      'seller is explicitly selling a Roblox game',
-      'selling a scripted map',
-      'only one example provided where two are required',
-      '1 scam log shown at the bottom of the post',
-      'no description or explanation of the product whatsoever',
-      'excess free model usage not declared as filler',
+      `Pack name: ${project} Bundle, listing ${ref}.`,
+      `Seller handle: ${username}, listing ref ${ref}.`,
+      `Included items: ${Math.floor(6 + Math.random() * 18)} usable assets, bundle ${ref}.`,
     ],
     investors: [
-      'revenue share offered is below 15% (e.g. 5% or 8%)',
-      'revenue share above 90%',
-      'only 2 or 3 images provided where 5 are required',
-      'game clearly appears under 55% complete from the images described',
-      'game stated as 100% complete but no game link provided',
-      '1 scam log shown at the bottom of the post',
-      'no investment amount stated',
+      `Game codename: ${project}, investor brief ${ref}.`,
+      `Owner handle: ${username}, pitch ref ${ref}.`,
+      `Development note: latest showcase batch is marked ${ref}.`,
     ],
     advertising: [
-      'game is described as private or not yet published',
-      'post is advertising an AFK game',
-      'post is advertising a development service not a game',
-      'product being advertised is not on the Roblox platform',
+      `Experience name: ${project}, update ${ref}.`,
+      `Creator handle: ${username}, promo ref ${ref}.`,
+      `Current update version: v${Math.floor(1 + Math.random() * 4)}.${Math.floor(Math.random() * 9)}, build ${ref}.`,
     ],
     reviews: [
-      'no image proof of the product received',
-      'no payment proof provided',
-      'post is a scam report not a review',
-      'review contains insulting or vulgar language',
-      'transaction described was not on RoDevs',
-      'payment proof shown does not match the product being reviewed',
+      `Transaction reference: ${ref}.`,
+      `Reviewer handle: ${username}, transaction ${ref}.`,
+      `Commission nickname: ${project}, order ${ref}.`,
     ],
   };
+  return pickRandom(variants[base] ?? variants.fh);
+}
 
-  const baseCategory = category.split('-')[0] as keyof typeof violationPool;
-  const violations = violationPool[baseCategory] ?? violationPool['fh'];
-  const pickedViolation = pickRandom(difficulty === 'easy' ? violations.slice(0, 4) : violations);
-
-  const catGuide: Record<string, string> = {
-    fh:             'A developer advertising their own services. Use the role type from the variation seed. Include what they offer, their pricing, examples, and contact method.',
-    lfd:            'A project owner hiring a developer. Include project description, scope of work, role needed, budget, and deadline. Use the tier minimums to make payment either correct or violating.',
-    skill_role:     'A developer applying for a verified skill role. Format: APPLICATION FOR: [role-tier] | Experience: [X years] | Examples: [links] | Created by: [username] ([userID]) | ID: [postID].',
-    sell_creations: 'A developer selling a ready-made asset (GUI kit, combat system, UI template, clothing pack, etc.). Include features, what is included, examples, and payment.',
-    investors:      'A developer seeking investment for a Roblox game. Include game name, % complete, revenue share offered, investment amount sought, and description of images/features.',
-    advertising:    'Someone advertising their Roblox game or group. Include game name, gameplay description, features, and a game link.',
-    reviews:        'A user reviewing a completed developer transaction. Show: who is reviewed, what was purchased, proof of product (image links), proof of payment (image link), written comment, and speed/quality/value ratings.',
+function categoryIntro(category: string): string {
+  const base = category.split('-')[0];
+  const intros: Record<string, string[]> = {
+    fh: [
+      'I am opening a few commission slots.',
+      'Available for a small number of projects this week.',
+      'Taking on Roblox work for teams that need a clean turnaround.',
+    ],
+    lfd: [
+      'Looking for someone reliable to help with this project.',
+      'We need one developer for a focused commission.',
+      'Hiring for a Roblox project that already has the basic direction planned.',
+    ],
+    skill_role: [
+      'Applying for this skill role with recent examples.',
+      'Submitting my portfolio for review.',
+      'Here is my application and proof for the role.',
+    ],
+    sell_creations: [
+      'Selling a ready-made Roblox asset pack.',
+      'This is a finished asset package available for purchase.',
+      'Offering this creation as a completed resource.',
+    ],
+    investors: [
+      'Looking for investment support for a Roblox game.',
+      'Seeking funding to help push this game further.',
+      'Opening an investment post for an in-development Roblox experience.',
+    ],
+    advertising: [
+      'Sharing a Roblox creation for people to check out.',
+      'Advertising this Roblox project to bring in new players.',
+      'Posting a quick promotion for my Roblox experience.',
+    ],
+    reviews: [
+      'Leaving a review for a completed RoDevs transaction.',
+      'Posting feedback about a developer I worked with.',
+      'Reviewing the result of a recent commission.',
+    ],
   };
+  return pickRandom(intros[base] ?? intros.fh);
+}
 
-  const variationSeed = buildVariationSeed();
+function neutralExtra(category: string): string {
+  const base = category.split('-')[0];
+  const extras: Record<string, string[]> = {
+    fh: [
+      'I can share more previews in DMs if needed.',
+      'Turnaround depends on the final scope.',
+      'I prefer clear references before starting.',
+    ],
+    lfd: [
+      'Please send relevant previous work when reaching out.',
+      'More project details can be discussed after contact.',
+      'The final scope can be confirmed before work begins.',
+    ],
+    skill_role: [
+      'All examples are recent and represent my current skill level.',
+      'I can provide additional proof if requested.',
+      'The linked examples are the ones I want reviewed.',
+    ],
+    sell_creations: [
+      'The buyer will receive the listed files after payment.',
+      'Small edits can be discussed before purchase.',
+      'The showcase links show what is included.',
+    ],
+    investors: [
+      'Funding would mainly go toward ads and final polish.',
+      'I can provide extra development details in DMs.',
+      'The game systems shown are the current build state.',
+    ],
+    advertising: [
+      'Feedback is welcome from anyone who tries it.',
+      'The linked experience is the main thing being advertised.',
+      'The post is meant to bring attention to the Roblox creation.',
+    ],
+    reviews: [
+      'This review is based on my own transaction.',
+      'The proof links show what I received and paid.',
+      'I am keeping the review focused on the completed work.',
+    ],
+  };
+  return pickRandom(extras[base] ?? extras.fh);
+}
 
-  const actionHint =
-    difficulty === 'easy'
-      ? `correct_action must be "deny". Violation to build into the post: ${pickedViolation}.`
-      : difficulty === 'medium'
-      ? `Choose one and commit: deny (violation: ${pickedViolation}), approve (clean post - over-denying clean posts is the most common trainee mistake), or request_pof (clean post but payment meets the POF threshold).`
-      : `Choose the correct_action that best fits your edge case: approve, deny, or request_pof.`;
+function makeVariantTitle(baseTitle: string, category: string): string {
+  const projects = [randomProjectName(), randomProjectName(), randomProjectName(), 'Skyline Studio', 'Moonlit Labs', 'Pixel Harbor'];
+  const suffixes = ['quick review', 'open slot', 'commission', 'portfolio check', 'project help', 'showcase'];
+  const base = category.split('-')[0];
+  const title = baseTitle.replace(/^Looking For Developer - /, 'Lf ').replace(/^Roblox Advertising - /, '');
+  return pickRandom([
+    title,
+    `${title} - ${pickRandom(projects)}`,
+    `${title} (${pickRandom(suffixes)})`,
+    base === 'lfd' ? `${title} for ${pickRandom(projects)}` : `${pickRandom(projects)} - ${title}`,
+  ]);
+}
 
-  return `Generate a ${difficulty} difficulty training post for category: ${category}.
+function pickDescriptionLine(parsed: Record<string, string>, scenario: TrainingScenario): { key: string | null; value: string } {
+  const preferredKeys = ['description', 'review', 'product', 'application for', 'notes'];
+  for (const key of preferredKeys) {
+    if (parsed[key]) return { key, value: parsed[key] };
+  }
+  return { key: null, value: scenario.title };
+}
 
-Category context: ${catGuide[baseCategory] ?? catGuide['fh']}
+function renderScenarioVariant(scenario: TrainingScenario): TrainingScenario {
+  const parsed = parseScenarioLines(scenario.description);
+  const title = makeVariantTitle(parsed.title ?? scenario.title, scenario.category);
+  const primaryDescription = pickDescriptionLine(parsed, scenario);
+  const description = varyLinks(primaryDescription.value);
+  const details = shuffle(Object.entries(parsed)
+    .filter(([key]) => !['title', primaryDescription.key, 'payment', 'about this user', 'post id'].includes(key))
+    .map(([key, value]) => ({ label: key.replace(/\b\w/g, c => c.toUpperCase()), value: varyLinks(value) })));
 
-Difficulty instructions: ${diffGuide[difficulty]}
+  const intro = categoryIntro(scenario.category);
+  const selectedExtras = shuffle([
+    uniquePostDetail(scenario.category),
+    ...sample([neutralExtra(scenario.category), randomAvailability()], 0, 2),
+  ]);
+  const style = pickRandom(['paragraph', 'compact', 'sections', 'bullets', 'detailed']);
+  let body: string;
 
-Action: ${actionHint}
+  if (style === 'paragraph') {
+    body = [
+      `${intro} ${description}`,
+      details.map(d => `${d.label}: ${d.value}`).join(' | '),
+      selectedExtras.join(' '),
+    ].filter(Boolean).join('\n\n');
+  } else if (style === 'compact') {
+    body = [
+      description,
+      ...details.slice(0, Math.max(1, Math.min(details.length, 2))).map(d => `${d.label}: ${d.value}`),
+      ...selectedExtras,
+    ].join('\n');
+  } else if (style === 'bullets') {
+    body = [
+      intro,
+      `- ${description}`,
+      ...details.map(d => `- ${d.label}: ${d.value}`),
+      ...selectedExtras.map(extra => `- ${extra}`),
+    ].join('\n');
+  } else if (style === 'detailed') {
+    body = [
+      intro,
+      '',
+      description,
+      '',
+      ...details.map(d => `${d.label}: ${d.value}`),
+      '',
+      ...selectedExtras,
+      pickRandom(['Please read the full post before deciding.', 'Only judge based on what is shown in this post.', 'I can answer questions after approval if needed.']),
+    ].join('\n');
+  } else {
+    body = [
+      `Description: ${description}`,
+      ...details.map(d => `${d.label}: ${d.value}`),
+      `Notes: ${selectedExtras.join(' ')}`,
+    ].join('\n');
+  }
 
-Variation seed - follow every item exactly, especially the payment amount:
-${variationSeed}
+  return {
+    ...scenario,
+    scenario_id: `${scenario.scenario_id}:${Date.now().toString(36)}:${randomCode()}`,
+    base_scenario_id: scenario.scenario_id,
+    title,
+    description: body,
+  };
+}
 
-Requirements:
-- description is the full post body the trainee reads. Format it like a real RoDevs post with correct section headers (TITLE, DESCRIPTION, PAYMENT, WORK EXAMPLES or CREATION SHOWCASE or GAME SHOWCASE, ABOUT THIS USER, POST ID) as appropriate for the category.
-- ABOUT THIS USER must show: "RoDevs Member since [date]", scam log status (e.g. "No scam logs found." or "2 scam logs found."), and reviews status (e.g. "Reviews: None found.").
-- Easy posts: 4-6 lines. Hard posts: 10-15 lines.
-- Invent specific non-generic names for games, projects, and developer usernames.
-- scam_logs: 0 for almost all posts. 2 for FH/LFD scam-log deny. 1 for sell_creations or investors scam-log denial.
-- member_since: realistic date within the last 2 years in format DD Month YYYY.
-- has_reviews: false most of the time.
-- violation: null only if correct_action is "approve" or "request_pof" with no other rule broken. Otherwise a short specific label describing exactly what is wrong (e.g. "price range is 1.8x the base - 1,000 to 1,800 R$, max allowed is 1,500 R$").
-- explanation: 2-3 sentences. State the exact rule, the precise threshold or requirement, and why the correct_action is right.
-- post_id: 6-digit number as a string.
-- difficulty field in JSON must be "${difficulty}".
+function getScenarioPool(category: string): TrainingScenario[] {
+  if (category === 'mixed') {
+    return Object.values(BASE_SCENARIOS).flat();
+  }
+  return BASE_SCENARIOS[category] ?? BASE_SCENARIOS.fh;
+}
 
-Output ONLY the raw JSON object.`;
+// Generate deterministic handbook-based posts instead of relying on AI to invent rules.
+export async function generateTrainingPost(category: string, usedScenarioIds: string[] = []): Promise<GeneratedPost | null> {
+  const scenarios = getScenarioPool(category);
+  const used = new Set(usedScenarioIds);
+  const freshScenarios = scenarios.filter(scenario => !used.has(scenario.scenario_id));
+  const recentScenarioCount = Math.max(1, Math.min(3, scenarios.length - 1));
+  const recent = new Set(usedScenarioIds.slice(-recentScenarioCount));
+  const fallbackScenarios = scenarios.filter(scenario => !recent.has(scenario.scenario_id));
+  const pickedBase = pickRandom(
+    freshScenarios.length > 0
+      ? freshScenarios
+      : fallbackScenarios.length > 0
+      ? fallbackScenarios
+      : scenarios,
+  );
+  const picked = renderScenarioVariant(pickedBase);
+
+  return {
+    ...picked,
+    post_id: randomPostId(picked.category),
+    member_since: randomMemberSince(),
+    difficulty: picked.difficulty ?? 'medium',
+  };
+}
+
+function formatTrainingPostBody(post: GeneratedPost): string {
+  const lines = post.description
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .filter(line => !/^title\s*:/i.test(line))
+    .filter(line => !/^payment\s*:/i.test(line))
+    .filter(line => !/^about this user\s*:/i.test(line))
+    .filter(line => !/^post id\s*:/i.test(line));
+
+  return lines
+    .map(line => line.replace(/^description\s*:\s*/i, ''))
+    .map(line => line.replace(/^(work examples|examples|showcase|game showcase|creation showcase|contact|deadline|revenue share|investment sought|notes|review|product|payment proof|application for)\s*:\s*/i, '**$1:** '))
+    .join('\n\n');
+}
+
+function formatPayment(post: GeneratedPost): string {
+  return post.payment ? post.payment : 'No payment stated.';
 }
 
 // BUILD POST EMBED
 export function buildPostEmbed(post: GeneratedPost, sessionScore: number, sessionTotal: number): EmbedBuilder {
-  const categoryDisplay = post.category
-    .split('-')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' > ');
-
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
-    .setTitle(post.title)
-    .setDescription(post.description);
-
-  if (post.payment) {
-    embed.addFields({ name: 'Payment', value: post.payment });
-  }
+    .setTitle(embedTitle(post.title))
+    .setDescription(embedDescription(formatTrainingPostBody(post)));
 
   const userLines = [
     `<@000000000000000000>`,
@@ -688,37 +931,86 @@ export function buildPostEmbed(post: GeneratedPost, sessionScore: number, sessio
   ];
 
   embed.addFields(
-    { name: 'About This User', value: userLines.join('\n') },
-    { name: 'Reviews',  value: post.has_reviews ? 'See profile.' : 'None found.', inline: true },
-    { name: 'Category', value: categoryDisplay,                                    inline: true },
-    { name: 'Post ID',  value: post.post_id,                                       inline: true },
+    embedField('Payment', formatPayment(post)),
+    embedField('About This User', userLines.join('\n')),
+    embedField('Reviews', post.has_reviews ? 'See profile.' : 'None found.', true),
+    embedField('Post ID', post.post_id, true),
   );
 
-  embed.setFooter({ text: `Training Session  |  Score: ${sessionScore}/${sessionTotal}  |  ${getDifficultyLabel(post.difficulty)}` })
+  embed.setFooter({ text: embedFooter(`Training Session  |  Score: ${sessionScore}/${sessionTotal}  |  ${getDifficultyLabel(post.difficulty)}`) })
     .setTimestamp();
 
   return embed;
 }
 
 // BUILD ACTION BUTTONS
-// Deny opens a dropdown - no suspend button (examples are not generated/visible to the reviewer in training)
-export function buildPostActionRows(sessionId: number, category: string): ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] {
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+export async function buildPostActionRows(
+  sessionId: number,
+  category: string,
+  disabled = false,
+): Promise<ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[]> {
+  const reasons = await getDenialReasons(category);
+  const baseCategory = category.split('-')[0];
+  const showSuspend = ['fh', 'skill_role', 'sell_creations', 'investors'].includes(baseCategory);
+  const showRequestPof = baseCategory === 'lfd';
+
+  const decisionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`pt_action:${sessionId}:approve`)
+      .setEmoji('✅')
       .setLabel('Approve')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`pt_action:${sessionId}:request_pof`)
-      .setLabel('Request Proof of Funds')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`pt_deny_open:${sessionId}`)
-      .setLabel('Deny')
+      .setCustomId(`pt_action:${sessionId}:deny`)
+      .setEmoji('🛑')
+      .setLabel('Deny (custom reason)')
       .setStyle(ButtonStyle.Danger),
   );
 
-  return [actionRow];
+  const denialReasonRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`pt_deny_sel:${sessionId}`)
+      .setPlaceholder('Pre-built denial reasons')
+      .setDisabled(disabled)
+      .addOptions(
+        reasons.slice(0, 25).map(r =>
+          new StringSelectMenuOptionBuilder()
+            .setLabel(r.label.slice(0, 100))
+            .setValue(r.label.slice(0, 100))
+            .setDescription(r.message.slice(0, 100))
+        )
+      )
+  );
+
+  const toolButtons: ButtonBuilder[] = [];
+
+  if (showSuspend) {
+    toolButtons.push(new ButtonBuilder()
+      .setCustomId(`pt_action:${sessionId}:suspend`)
+      .setEmoji('✋')
+      .setLabel('Suspend')
+      .setStyle(ButtonStyle.Primary));
+  }
+
+  if (showRequestPof) {
+    toolButtons.push(new ButtonBuilder()
+      .setCustomId(`pt_action:${sessionId}:request_pof`)
+      .setEmoji('✋')
+      .setLabel('Request Proof of Funds')
+      .setStyle(ButtonStyle.Primary));
+  }
+
+  const rows: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = [decisionRow, denialReasonRow];
+  const toolRow = toolButtons.length > 0
+    ? new ActionRowBuilder<ButtonBuilder>().addComponents(...toolButtons)
+    : null;
+  if (toolRow) rows.push(toolRow);
+
+  for (const row of [decisionRow, toolRow].filter(Boolean) as ActionRowBuilder<ButtonBuilder>[]) {
+    row.components.forEach(component => component.setDisabled(disabled));
+  }
+
+  return rows;
 }
 
 // BUILD DENY REASON SELECT - filtered to the post's category, async because it queries DB
@@ -767,18 +1059,18 @@ export function buildFeedbackEmbed(
     .setColor(correct ? Colors.Green : Colors.Red)
     .setTitle(correct ? 'Correct' : 'Incorrect')
     .addFields(
-      { name: 'Your Action',    value: yourActionDisplay,    inline: true },
-      { name: 'Correct Action', value: correctActionDisplay, inline: true },
-      { name: 'Post',           value: `**${post.title}** (\`${post.post_id}\`)`, inline: false },
+      embedField('Your Action', yourActionDisplay, true),
+      embedField('Correct Action', correctActionDisplay, true),
+      embedField('Post', `**${post.title}** (\`${post.post_id}\`)`, false),
     );
 
   if (!correct && post.violation) {
-    embed.addFields({ name: 'Rule Violated', value: post.violation });
+    embed.addFields(embedField('Rule Violated', post.violation));
   }
 
-  embed.addFields({ name: 'Explanation', value: post.explanation });
+  embed.addFields(embedField('Explanation', post.explanation));
 
-  embed.setFooter({ text: `Score: ${sessionScore}/${sessionTotal}  |  ${getDifficultyLabel(post.difficulty)}` })
+  embed.setFooter({ text: embedFooter(`Score: ${sessionScore}/${sessionTotal}  |  ${getDifficultyLabel(post.difficulty)}`) })
     .setTimestamp();
 
   return embed;
@@ -834,16 +1126,43 @@ export function buildCategorySelect(): ActionRowBuilder<StringSelectMenuBuilder>
 }
 
 // SESSION DB HELPERS
+async function ensurePostTrainSessionSchema(): Promise<void> {
+  try {
+    await sql`ALTER TABLE post_train_sessions ADD COLUMN IF NOT EXISTS shown_post_keys JSONB NOT NULL DEFAULT '[]'::jsonb`;
+  } catch (e) {
+    console.error('[PostTrain] Failed to ensure session schema:', e);
+  }
+}
+
+function getShownPostKeys(session: any): string[] {
+  const raw = session?.shown_post_keys;
+  if (Array.isArray(raw)) return raw.filter((item): item is string => typeof item === 'string');
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+export function getShownScenarioIds(session: any): string[] {
+  return getShownPostKeys(session);
+}
+
 export async function getActiveSession(userId: string): Promise<any | null> {
   const rows = await sql`SELECT * FROM post_train_sessions WHERE user_id = ${userId} AND status = 'active'`;
   return rows[0] ?? null;
 }
 
 export async function createSession(userId: string, category: string): Promise<any> {
+  await ensurePostTrainSessionSchema();
   await sql`UPDATE post_train_sessions SET status = 'ended', ended_at = NOW() WHERE user_id = ${userId} AND status = 'active'`;
   const [session] = await sql`
-    INSERT INTO post_train_sessions (user_id, category, status, score, total)
-    VALUES (${userId}, ${category}, 'active', 0, 0)
+    INSERT INTO post_train_sessions (user_id, category, status, score, total, shown_post_keys)
+    VALUES (${userId}, ${category}, 'active', 0, 0, '[]'::jsonb)
     RETURNING *
   `;
   return session;
@@ -860,9 +1179,22 @@ export async function endSession(sessionId: number): Promise<any> {
 }
 
 export async function savePostToSession(sessionId: number, post: GeneratedPost): Promise<void> {
+  await ensurePostTrainSessionSchema();
+  const scenarioId = post.base_scenario_id ?? post.scenario_id ?? `${post.category}:${post.title}`;
   await sql`
     UPDATE post_train_sessions
-    SET last_post_data = ${JSON.stringify(post)}::jsonb
+    SET
+      last_post_data = ${JSON.stringify(post)}::jsonb,
+      shown_post_keys = (
+        SELECT COALESCE(jsonb_agg(recent.key ORDER BY recent.ord), '[]'::jsonb)
+        FROM (
+          SELECT shown.key, shown.ord
+          FROM jsonb_array_elements_text(shown_post_keys || ${JSON.stringify([scenarioId])}::jsonb)
+            WITH ORDINALITY AS shown(key, ord)
+          ORDER BY shown.ord DESC
+          LIMIT 50
+        ) AS recent
+      )
     WHERE id = ${sessionId}
   `;
 }

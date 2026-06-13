@@ -64,6 +64,7 @@ import * as clearStale from '../commands/hpa/clear_stale';
 import { updateScheduleEmbed, buildGameNightEmbed } from '../services/gameNightService';
 import * as forceStrike from '../commands/hpa/force_strike';
 import * as forceStopAssessment from '../commands/hpa/force_stop_assessment';
+import * as forceStopSessions from '../commands/hpa/force_stop_sessions';
 import * as manageLog from '../commands/hpa/manage_log';
 import * as setEscalation from '../commands/hpa/set_escalation';
 import * as recalcEscalation from '../commands/hpa/recalculate_escalation';
@@ -75,37 +76,32 @@ import * as severityGuide from '../commands/hpa/severity_guide';
 import * as manageDenialReasons from '../commands/hpa/manage_denial_reasons';
 import { handleDenialReasonsInteraction } from '../commands/hpa/manage_denial_reasons';
 import * as postTrain from '../commands/shared/post_train';
-import * as trainAi from '../commands/spa/train_ai';
-import * as seniorPostTrain from '../commands/spa/senior_post_train';
-import { routeSeniorInteraction, handleSeniorCategorySelect, hasSeniorSession } from '../commands/spa/senior_post_train';
 import { handlePostTrainInteraction } from './postTrainHandler';
 
 const commands: Record<string, { execute: (i: ChatInputCommandInteraction) => Promise<void> }> = {
-  help, my_logs: myLogs, appeal, tag, tag_search: tagSearch, pa_assessment: paAssessment,
-  log_mistake: logMistake, staff_profile: staffProfile, staff_overview: staffOverview,
-  lookup_post: lookupPost, warn_user: warnUser, create_vote: createVote,
-  list_assessments: listAssessments, create_tag: createTag, edit_tag: editTag, delete_tag: deleteTag,
-  create_embed: createEmbed, edit_embed: editEmbed,
-  suggest, search_suggestions: searchSuggestions,
-  set_reminder: setReminder, send_tag: sendTag,
+  help, 'my-logs': myLogs, appeal, tag, 'tag-search': tagSearch, 'pa-assessment': paAssessment,
+  'log-mistake': logMistake, 'staff-profile': staffProfile, 'staff-overview': staffOverview,
+  'lookup-post': lookupPost, 'warn-user': warnUser, 'create-vote': createVote,
+  'list-assessments': listAssessments, 'create-tag': createTag, 'edit-tag': editTag, 'delete-tag': deleteTag,
+  'create-embed': createEmbed, 'edit-embed': editEmbed,
+  suggest, 'search-suggestions': searchSuggestions,
+  'set-reminder': setReminder, 'send-tag': sendTag,
   remind, 'bot-bug': botBug,
   'post-train': postTrain,
-  'train-ai': trainAi,
-  'senior-post-train': seniorPostTrain,
-  import_assessment_questions: importAssessmentQ,
-  escalate, my_escalations: myEscalations, view_escalations: viewEscalations,
-  edit_game_night: editGameNight,
-  create_game_night: createGameNight, cancel_game_night: cancelGameNight,
-  delete_suggestion: deleteSuggestion, clear_stale: clearStale,
-  create_feedback: createFeedback, close_feedback: closeFeedback,
-  setup_weekly_report: setupWeeklyReport, trigger_weekly_report: triggerWeeklyReport,
-  view_report_status: viewReportStatus,
-  spa_quota: spaQuota, view_spa_audit: viewSpaAudit,
-  configure_audit: configureAudit, clear_spa_flag: clearSpaFlag,
-  force_strike: forceStrike, 'force-stop-assessment': forceStopAssessment, manage_log: manageLog, set_escalation: setEscalation,
-  recalculate_escalation: recalcEscalation, notify_user: notifyUser, bulk_actions: bulkActions,
-  manage_log_tracker: manageLogTracker,
-  assessment, severity_guide: severityGuide,
+  'import-assessment-questions': importAssessmentQ,
+  escalate, 'my-escalations': myEscalations, 'view-escalations': viewEscalations,
+  'edit-game-night': editGameNight,
+  'create-game-night': createGameNight, 'cancel-game-night': cancelGameNight,
+  'delete-suggestion': deleteSuggestion, 'clear-stale': clearStale,
+  'create-feedback': createFeedback, 'close-feedback': closeFeedback,
+  'setup-weekly-report': setupWeeklyReport, 'trigger-weekly-report': triggerWeeklyReport,
+  'view-report-status': viewReportStatus,
+  'spa-quota': spaQuota, 'view-spa-audit': viewSpaAudit,
+  'configure-audit': configureAudit, 'clear-spa-flag': clearSpaFlag,
+  'force-strike': forceStrike, 'force-stop-assessment': forceStopAssessment, 'force-stop-sessions': forceStopSessions, 'manage-log': manageLog, 'set-escalation': setEscalation,
+  'recalculate-escalation': recalcEscalation, 'notify-user': notifyUser, 'bulk-actions': bulkActions,
+  'manage-log-tracker': manageLogTracker,
+  assessment, 'severity-guide': severityGuide,
   'manage-denial-reasons': manageDenialReasons,
 };
 
@@ -154,11 +150,6 @@ async function handleButton(i: any): Promise<void> {
   // Post training buttons
   if (action === 'pt_action' || action === 'pt_deny_open' || action === 'pt_continue' || action === 'pt_end') {
     await handlePostTrainInteraction(i); return;
-  }
-
-  // Senior post training buttons
-  if (action.startsWith('spt_')) {
-    await routeSeniorInteraction(i); return;
   }
 
   // Denial reasons management buttons
@@ -564,7 +555,7 @@ async function handleButton(i: any): Promise<void> {
     if (!req) { await i.reply({ embeds: [errorEmbed('Request not found.')], ephemeral: true }); return; }
     await sql`UPDATE retake_requests SET status = 'approved' WHERE id = ${reqId}`;
     await sql`DELETE FROM assessment_sessions WHERE user_id = ${req.user_id} AND assessment_id = ${req.assessment_id}`;
-    await safeDM(i.client, req.user_id, successEmbed('Retake Approved', `Your retake for **${req.title}** has been approved. Use \`/pa_assessment\` to begin.`), 'retake approved');
+    await safeDM(i.client, req.user_id, successEmbed('Retake Approved', `Your retake for **${req.title}** has been approved. Use \`/pa-assessment\` to begin.`), 'retake approved');
     await i.update({ components: [] });
     await i.followUp({ embeds: [successEmbed('Approved', `Retake approved for <@${req.user_id}>.`)], ephemeral: true });
   }
@@ -828,7 +819,7 @@ async function handleEscalationButton(i: any, action: string, rest: string[]): P
       new ButtonBuilder().setCustomId(`esc_reject:${escalationId}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger),
     );
 
-    await i.message.edit({ content: `<@&${config.roles.HPA}> This escalation has been escalated to HPA.`, embeds: [buildEscalationEmbed(updated)], components: [hpaRow] });
+    await i.message.edit({ content: `<@&${config.roles.HPA}> This escalation has been escalated to HPA.`, allowedMentions: { roles: [config.roles.HPA] }, embeds: [buildEscalationEmbed(updated)], components: [hpaRow] });
     await i.reply({ content: 'Escalated to HPA.', ephemeral: true });
   }
 
@@ -1331,21 +1322,14 @@ async function handleSuggestionButton(i: any, action: string, rest: string[]): P
 async function handleSelect(i: any): Promise<void> {
   const [action, ...rest] = i.customId.split(':');
 
-  // Post training category select - route to senior flow if senior session is active
+  // Post training category select
   if (i.customId === 'pt_category_select') {
-    const isSenior = await hasSeniorSession(i.user.id);
-    if (isSenior) { await handleSeniorCategorySelect(i as any); return; }
     await handlePostTrainInteraction(i); return;
   }
 
   // Post training deny select
   if (i.customId.startsWith('pt_deny_sel:')) {
     await handlePostTrainInteraction(i); return;
-  }
-
-  // Senior post training selects
-  if (i.customId.startsWith('spt_')) {
-    await routeSeniorInteraction(i); return;
   }
 
   // Denial reasons management selects
@@ -1564,11 +1548,6 @@ async function handleModal(i: any): Promise<void> {
     await handleDenialReasonsInteraction(i); return;
   }
 
-  // Senior post training modals
-  if (action === 'spt_thought_modal' || action === 'spt_deny_thought_modal') {
-    await routeSeniorInteraction(i); return;
-  }
-
   if (action === 'session_count_modal') {
     await i.deferReply({ ephemeral: true });
     const sessionId  = parseInt(rest[0]);
@@ -1614,6 +1593,7 @@ async function handleModal(i: any): Promise<void> {
       allIds.push(...channelIds);
     } catch { /* field not present */ }
 
+    await sql`DELETE FROM spa_log_sessions WHERE user_id = ${i.user.id} AND status = 'completed' AND id <> ${sessionId}`;
     await sql`UPDATE spa_log_sessions SET status = 'completed', completed_at = NOW() WHERE id = ${sessionId}`;
 
     const today  = new Date().toISOString().split('T')[0];
@@ -2108,7 +2088,13 @@ async function handleModal(i: any): Promise<void> {
 
     try {
       const ch = await i.client.channels.fetch(config.channels.escalations) as TextChannel;
-      const sentMsg = await ch.send({ content: `${pingRole} New escalation request`, embeds: [embed], components: [row] });
+      const roleId = actionType === 'punishment_request' ? config.roles.HPA : config.roles.SPA;
+      const sentMsg = await ch.send({
+        content: `<@&${roleId}> New escalation request`,
+        allowedMentions: { roles: [roleId] },
+        embeds: [embed],
+        components: [row],
+      });
       await sql`UPDATE post_escalations SET message_id = ${sentMsg.id} WHERE id = ${result.id}`;
     } catch (e) { console.error('Failed to post escalation:', e); }
 

@@ -3,7 +3,7 @@ import { isPA } from '../../utils/permissions';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('game_suggestions')
+  .setName('game-suggestions')
   .setDescription('View approved game suggestions sorted by upvotes');
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {
@@ -18,7 +18,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
   const embed = new EmbedBuilder().setColor(Colors.Purple).setTitle('🎮 Game Suggestions').setTimestamp();
 
   if (suggestions.length === 0) {
-    embed.setDescription('No approved suggestions yet. Use `/suggest_game` to add one!');
+    embed.setDescription('No approved suggestions yet. Use `/suggest game-night` to add one!');
   } else {
     embed.setDescription(
       suggestions.map((s: any, idx: number) =>

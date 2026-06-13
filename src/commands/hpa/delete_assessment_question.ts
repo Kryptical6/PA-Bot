@@ -3,7 +3,7 @@ import { isHPA } from '../../utils/permissions';
 import { errorEmbed, successEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('delete_assessment_question').setDescription('Delete a question (HPA only)')
+export const data = new SlashCommandBuilder().setName('delete-assessment-question').setDescription('Delete a question (HPA only)')
   .addIntegerOption(o => o.setName('question_id').setDescription('Question ID').setRequired(true));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

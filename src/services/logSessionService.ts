@@ -7,14 +7,23 @@ const SESSION_HOURS = 12;
 
 // ─── START SESSION ────────────────────────────────────────────────────────────
 export async function startLogSession(client: Client, userId: string, dmChannelId: string, dmMessageId: string): Promise<void> {
-  // Close any existing active session first
-  const existing = await sql`SELECT * FROM spa_log_sessions WHERE user_id = ${userId} AND status = 'active'`;
-  for (const session of existing) {
-    await closeSession(client, session, 'expired', 'A new session was started. Previous session closed.');
+  const [existing] = await sql`SELECT * FROM spa_log_sessions WHERE user_id = ${userId} AND status = 'active'`;
+  if (existing) {
+    try {
+      const dmChannel = await client.channels.fetch(existing.dm_channel_id) as DMChannel;
+      const msg       = await dmChannel.messages.fetch(existing.dm_message_id);
+      await msg.edit({
+        embeds: [new EmbedBuilder()
+          .setColor(Colors.Orange)
+          .setTitle('Session Restarted')
+          .setDescription('A new log session was started. This session has been replaced.')
+          .setTimestamp()],
+        components: [],
+      });
+    } catch { /* old DM may be gone */ }
   }
 
   const expiresAt = new Date(Date.now() + SESSION_HOURS * 3600000);
-  // ON CONFLICT handles any race between the close above and this insert
   await sql`
     INSERT INTO spa_log_sessions (user_id, started_at, expires_at, dm_message_id, dm_channel_id)
     VALUES (${userId}, NOW(), ${expiresAt.toISOString()}, ${dmMessageId}, ${dmChannelId})
@@ -74,6 +83,7 @@ export async function updateSessionDM(client: Client, userId: string): Promise<v
 
 // ─── CLOSE SESSION ────────────────────────────────────────────────────────────
 export async function closeSession(client: Client, session: any, status: 'completed' | 'expired', reason?: string): Promise<void> {
+  await sql`DELETE FROM spa_log_sessions WHERE user_id = ${session.user_id} AND status = ${status} AND id <> ${session.id}`;
   await sql`UPDATE spa_log_sessions SET status = ${status}, completed_at = NOW() WHERE id = ${session.id}`;
   try {
     const dmChannel = await client.channels.fetch(session.dm_channel_id) as DMChannel;

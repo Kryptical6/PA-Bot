@@ -5,7 +5,7 @@ import { sql } from '../../database/client';
 
 const VALID = ['approve', 'deny', 'suspend', 'request_pof'];
 
-export const data = new SlashCommandBuilder().setName('edit_assessment_question').setDescription('Edit a question (HPA only)')
+export const data = new SlashCommandBuilder().setName('edit-assessment-question').setDescription('Edit a question (HPA only)')
   .addIntegerOption(o => o.setName('question_id').setDescription('Question ID').setRequired(true));
 
 export async function execute(i: ChatInputCommandInteraction): Promise<void> {

@@ -9,7 +9,7 @@ import { errorEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
 export const data = new SlashCommandBuilder()
-  .setName('log_mistake')
+  .setName('log-mistake')
   .setDescription('Submit a mistake for HPA review')
   .addUserOption(o => o.setName('user').setDescription('Staff member to log').setRequired(true))
   .addStringOption(o => o.setName('severity').setDescription('Severity of the mistake').setRequired(true)

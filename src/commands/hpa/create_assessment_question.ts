@@ -5,7 +5,7 @@ import { sql } from '../../database/client';
 
 const VALID = ['approve', 'deny', 'suspend', 'request_pof'];
 
-export const data = new SlashCommandBuilder().setName('create_assessment_question').setDescription('Add a question to an assessment (HPA only)')
+export const data = new SlashCommandBuilder().setName('create-assessment-question').setDescription('Add a question to an assessment (HPA only)')
   .addIntegerOption(o => o.setName('assessment_id').setDescription('Assessment ID').setRequired(true))
   .addBooleanOption(o => o.setName('scripting').setDescription('Scripting-only question?').setRequired(true));
 

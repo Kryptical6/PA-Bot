@@ -3,7 +3,7 @@ import { isHPA } from '../../utils/permissions';
 import { errorEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 
-export const data = new SlashCommandBuilder().setName('view_assessment_results').setDescription('View assessment results for a user (HPA only)')
+export const data = new SlashCommandBuilder().setName('view-assessment-results').setDescription('View assessment results for a user (HPA only)')
   .addUserOption(o => o.setName('user').setDescription('Staff member').setRequired(true))
   .addIntegerOption(o => o.setName('assessment_id').setDescription('Filter by assessment ID (optional)'));
 

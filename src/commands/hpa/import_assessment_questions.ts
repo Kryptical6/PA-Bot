@@ -6,7 +6,7 @@ import { sql } from '../../database/client';
 const VALID_ANSWERS = ['approve', 'deny', 'suspend', 'request_pof'];
 
 export const data = new SlashCommandBuilder()
-  .setName('import_assessment_questions')
+  .setName('import-assessment-questions')
   .setDescription('Bulk import questions from CSV (HPA only)')
   .addIntegerOption(o => o.setName('assessment_id').setDescription('Assessment ID to import into').setRequired(true).setMinValue(1))
   .addAttachmentOption(o => o.setName('csv_file').setDescription('CSV file: post_id,answer,reason,context — one per line').setRequired(true))

@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, GuildMember, EmbedBuilder, Colors, ButtonBuilder, ButtonStyle, ActionRowBuilder, TextChannel, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType } from 'discord.js';
 import { isPA, isSPA } from '../../utils/permissions';
-import { errorEmbed } from '../../utils/embeds';
+import { embedField, embedFooter, errorEmbed } from '../../utils/embeds';
 import { sql } from '../../database/client';
 import { config } from '../../config';
 
@@ -12,6 +12,7 @@ export const ACTION_LABELS: Record<string, string> = {
 };
 
 export function buildEscalationEmbed(e: any): EmbedBuilder {
+  const action = ACTION_LABELS[e?.action] ?? e?.action ?? 'Unknown action';
   const statusMap: Record<string, { color: number; label: string }> = {
     pending:       { color: Colors.Yellow, label: 'Pending - awaiting claim' },
     claimed:       { color: Colors.Blue,   label: `Claimed by <@${e.claimed_by}>` },
@@ -20,22 +21,22 @@ export function buildEscalationEmbed(e: any): EmbedBuilder {
     escalated_hpa: { color: Colors.Purple, label: 'Escalated to HPA' },
   };
 
-  const { color, label } = statusMap[e.status] ?? { color: 0x99aab5, label: e.status };
+  const { color, label } = statusMap[e?.status] ?? { color: 0x99aab5, label: e?.status ?? 'Unknown status' };
 
   const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle('Post Escalation')
     .addFields(
-      { name: 'Post ID',      value: `\`${e.post_id}\``,                  inline: true },
-      { name: 'Submitted by', value: `<@${e.submitted_by}>`,              inline: true },
-      { name: 'Action',       value: ACTION_LABELS[e.action] ?? e.action, inline: true },
-      { name: 'Status',       value: label },
-      { name: 'Information',  value: e.information },
+      embedField('Post ID', e?.post_id ? `\`${e.post_id}\`` : null, true),
+      embedField('Submitted by', e?.submitted_by ? `<@${e.submitted_by}>` : null, true),
+      embedField('Action', action, true),
+      embedField('Status', label),
+      embedField('Information', e?.information),
     )
-    .setFooter({ text: `Escalation ID: ${e.id}` })
+    .setFooter({ text: embedFooter(`Escalation ID: ${e?.id ?? 'unknown'}`) })
     .setTimestamp();
 
-  if (e.resolution_notes) embed.addFields({ name: 'Resolution Notes', value: e.resolution_notes });
+  if (e?.resolution_notes) embed.addFields(embedField('Resolution Notes', e.resolution_notes));
   return embed;
 }
 
@@ -73,8 +74,8 @@ export function buildOutcomeSelect(escalationId: number, action: string): Action
       { label: 'Escalated to HPA',        description: 'Requires further HPA decision.',                                         value: 'escalated' },
     ],
     takeover_post: [
-      { label: 'Taken Over - Resolved',   description: 'Post taken over and resolved.',                                         value: 'takeover_resolved' },
-      { label: 'Taken Over - Pending',    description: 'Post taken over, still pending action.',                                 value: 'takeover_pending' },
+      { label: 'Takeover Resolved',       description: 'Post taken over and resolved.',                                         value: 'takeover_resolved' },
+      { label: 'Takeover Pending',        description: 'Post taken over, still pending action.',                                 value: 'takeover_pending' },
       { label: 'No Action Needed',        description: 'Reviewed - no takeover required.',                                      value: 'no_action' },
     ],
   };
@@ -118,7 +119,7 @@ export async function execute(i: ChatInputCommandInteraction): Promise<void> {
     .addOptions(
       new StringSelectMenuOptionBuilder().setLabel('Review my post').setDescription('Ask a senior to review my post').setValue('review_post'),
       new StringSelectMenuOptionBuilder().setLabel('Revoke a Skill Role').setDescription('Request removal of a skill role').setValue('revoke_skill_role'),
-      new StringSelectMenuOptionBuilder().setLabel('Take-over this post').setDescription('Ask a senior to take over handling a post').setValue('takeover_post'),
+      new StringSelectMenuOptionBuilder().setLabel('Take over this post').setDescription('Ask a senior to take over handling a post').setValue('takeover_post'),
       new StringSelectMenuOptionBuilder().setLabel('Punishment Request').setDescription('Code/Scripts Only - pings HPA directly').setValue('punishment_request'),
     );
 
